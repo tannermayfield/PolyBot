@@ -1,0 +1,887 @@
+  :root {
+    /* ── Surfaces ─────────────────────────────────────────────────────── */
+    --gt-bg: #12203a;
+    --gt-bg-alt: #17273f;
+    --gt-bg-alt2: #0f1c30;
+    --gt-bg-input: #0a1524;
+    --gt-border: #294564;
+    --gt-border-soft: #365a7e;
+    --gt-veil-rgb: 255,255,255;
+    --gt-track-off: #33334f;
+
+    /* ── Text ─────────────────────────────────────────────────────────── */
+    --gt-text: #edf2fb;
+    --gt-text-dim: #c4d3e5;
+    --gt-text-mid: #9db0c6;
+    --gt-text-faint: #7590a8;
+    --gt-text-faint2: #56697e;
+
+    /* ── Blue (primary accent — "new / not yet known" words) ────────────── */
+    --gt-blue: #5b9dff;
+    --gt-blue-heading: #8fc0ff;
+    --gt-blue-rgb: 91,157,255;
+    --gt-blue-solid: #2563eb;
+
+    /* ── Sky (secondary informational blue, kept distinct from accent) ──── */
+    --gt-sky: #93c5fd;
+    --gt-sky-rgb: 96,165,250;
+
+    /* ── Gold (learning words) ───────────────────────────────────────── */
+    --gt-gold: #e3bb4a;
+    --gt-gold-heading: #f4d67e;
+    --gt-gold-rgb: 227,187,74;
+
+    /* Fixed "on-page" word colors — see notes in styles.css; kept constant
+       across light/dark since they sit on host-page text we don't own. */
+    --gt-word-blue: #3b82f6;
+    --gt-word-blue-rgb: 59,130,246;
+    --gt-word-gold: #c9972e;
+    --gt-word-gold-rgb: 201,151,46;
+
+    /* ── Green (known words) ─────────────────────────────────────────── */
+    --gt-green: #4ade80;
+    --gt-green-heading: #86efac;
+    --gt-green-rgb: 34,197,94;
+
+    /* ── Red (destructive / delete) ──────────────────────────────────── */
+    --gt-red: #fc8181;
+    --gt-red-strong: #e53e3e;
+    --gt-red-rgb: 229,62,62;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --gt-bg: #f8f6ee;
+      --gt-bg-alt: #ffffff;
+      --gt-bg-alt2: #eef1f7;
+      --gt-bg-input: #ffffff;
+      --gt-border: #dbe1ea;
+      --gt-border-soft: #bfccdc;
+      --gt-veil-rgb: 10,20,35;
+      --gt-track-off: #ccd3dd;
+
+      --gt-text: #16233a;
+      --gt-text-dim: #33465e;
+      --gt-text-mid: #55697f;
+      --gt-text-faint: #798aa0;
+      --gt-text-faint2: #97a5b6;
+
+      --gt-blue: #1d4ed8;
+      --gt-blue-heading: #1e3a8a;
+      --gt-blue-rgb: 29,78,216;
+
+      --gt-gold: #93690b;
+      --gt-gold-heading: #6f4f08;
+      --gt-gold-rgb: 147,105,11;
+
+      --gt-green: #15803d;
+      --gt-green-heading: #166534;
+      --gt-green-rgb: 21,128,61;
+
+      --gt-red: #dc2626;
+      --gt-red-strong: #b91c1c;
+      --gt-red-rgb: 220,38,38;
+    }
+  }
+
+/* SpanishTube — Transcript Word Coloring & Popup Styles */
+
+/* ── Word status colors ─────────────────────────────────────────────────── */
+.sptube-word {
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1px 1px;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-weight: inherit;
+  display: inline;
+  /* Many caption/subtitle overlays (YouTube's own, and plenty of other sites' custom video players) set pointer-events:none
+     on the caption box itself so clicks fall through to the video/player
+     controls underneath — which would otherwise make the words we colored
+     completely unclickable even though tokenizing and coloring worked
+     fine (colors are pure CSS, not gated on pointer-events). Force events
+     back on for our own spans specifically, wherever they land, so this
+     doesn't have to be special-cased per site. */
+  pointer-events: auto !important;
+  /* Disable native text selection so a click-drag is always interpreted as
+     our own multi-word selection gesture instead of the browser starting a
+     native text selection (which was hijacking the drag and swallowing the
+     pointermove events our JS needs to track the selection). */
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.sptube-word:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* Unknown words — blue */
+.sptube-unknown {
+  color: var(--gt-word-blue) !important;
+  font-weight: 600;
+}
+
+/* Learning words — gold */
+.sptube-learning {
+  color: var(--gt-word-gold) !important;
+  font-weight: 600;
+}
+
+/* Known words — default YouTube text color */
+.sptube-known {
+  color: inherit !important;
+  font-weight: inherit;
+}
+
+/* The word the user last clicked, kept highlighted while its popup is open */
+.sptube-active-word {
+  background: rgba(var(--gt-word-blue-rgb), 0.28) !important;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(var(--gt-word-blue-rgb), 0.6);
+}
+
+/* Words currently being drag-selected as a multi-word term */
+.sptube-selecting {
+  background: rgba(var(--gt-sky-rgb), 0.3) !important;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(var(--gt-sky-rgb), 0.7);
+}
+
+/* Words that matched a saved phrase — the phrase's status color still
+   applies via .sptube-known / .sptube-learning / .sptube-unknown above,
+   this just adds a subtle underline so it's clear the word is part of a
+   saved multi-word term rather than colored on its own. */
+.sptube-phrase-word {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+.sptube-phrase-word:hover {
+  text-decoration-style: solid;
+}
+
+/* ── On-screen caption words ────────────────────────────────────────────── */
+/* YouTube's caption overlay normally isn't clickable — its text passes
+   clicks straight through to the video. Force pointer events back on for
+   our word spans specifically so they stay clickable while the rest of the
+   caption line (and the video behind it) still behaves normally. */
+.ytp-caption-window-container .sptube-word {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.ytp-caption-window-container .sptube-word:hover {
+  opacity: 1;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+/* ── Video captions overlay (any site, HTML5 <video> with a subtitle/
+   caption track) ────────────────────────────────────────────────────── */
+.sptube-videocc-overlay {
+  position: fixed !important;
+  left: 0;
+  bottom: 40px;
+  transform: translateX(-50%);
+  pointer-events: none !important;
+  text-align: center;
+  z-index: 2147483647 !important;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.sptube-videocc-overlay.sptube-videocc-visible {
+  opacity: 1;
+}
+.sptube-videocc-line {
+  display: inline-block;
+  pointer-events: auto !important;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.45;
+  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+.sptube-videocc-line .sptube-word {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+.sptube-videocc-line .sptube-word:hover {
+  opacity: 1;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+/* ── Hover tooltip (definition in context, no click needed) ────────────────── */
+.sptube-hover-tooltip {
+  width: 288px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--gt-bg-alt);
+  border: 1px solid var(--gt-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(var(--gt-blue-rgb), 0.18);
+  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+  color: var(--gt-text);
+  padding: 10px 12px;
+  pointer-events: none; /* purely informational — clicking still hits the word underneath */
+  animation: sptube-fadein 0.12s ease;
+}
+
+.sptube-hover-word {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gt-blue-heading);
+  margin-bottom: 4px;
+}
+
+.sptube-hover-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--gt-text-dim);
+}
+
+/* ── Popup container ────────────────────────────────────────────────────── */
+.sptube-popup {
+  position: absolute;
+  z-index: 9999999;
+  width: 308px;
+  background: var(--gt-bg-alt);
+  border: 1px solid var(--gt-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(var(--gt-blue-rgb), 0.2);
+  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--gt-text);
+  overflow: hidden;
+  animation: sptube-fadein 0.15s ease;
+}
+
+@keyframes sptube-fadein {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Popup header ───────────────────────────────────────────────────────── */
+.sptube-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  background: var(--gt-bg-alt2);
+  border-bottom: 1px solid var(--gt-border);
+}
+
+.sptube-popup-word {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gt-blue-heading);
+  letter-spacing: -0.3px;
+}
+
+.sptube-popup-close {
+  background: none;
+  border: none;
+  color: var(--gt-text-faint);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background 0.1s, color 0.1s;
+  line-height: 1;
+}
+.sptube-popup-close:hover {
+  background: rgba(var(--gt-veil-rgb),0.08);
+  color: var(--gt-text);
+}
+
+/* ── Multi-word phrase note ─────────────────────────────────────────────── */
+.sptube-phrase-note {
+  padding: 8px 14px;
+  font-size: 11.5px;
+  color: var(--gt-sky);
+  background: rgba(var(--gt-sky-rgb), 0.1);
+  border-bottom: 1px solid var(--gt-border);
+}
+
+/* ── Loading state ──────────────────────────────────────────────────────── */
+.sptube-popup-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 14px;
+  color: var(--gt-text-faint);
+  font-size: 13px;
+}
+
+.sptube-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--gt-border-soft);
+  border-top-color: var(--gt-blue);
+  border-radius: 50%;
+  animation: sptube-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes sptube-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Saved meanings (past translations already stored for this word) ──────── */
+.sptube-saved-meanings {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gt-border);
+  max-height: 150px;
+  overflow-y: auto;
+  background: rgba(var(--gt-blue-rgb), 0.04);
+}
+.sptube-saved-meanings::-webkit-scrollbar { width: 4px; }
+.sptube-saved-meanings::-webkit-scrollbar-track { background: transparent; }
+.sptube-saved-meanings::-webkit-scrollbar-thumb { background: var(--gt-border-soft); border-radius: 2px; }
+
+.sptube-saved-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--gt-text-faint);
+  margin-bottom: 8px;
+}
+
+.sptube-saved-entry { margin-bottom: 6px; }
+.sptube-saved-entry:last-child { margin-bottom: 0; }
+
+.sptube-saved-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.sptube-saved-highlight {
+  display: inline-block;
+  background: rgba(var(--gt-blue-rgb), 0.18);
+  color: var(--gt-blue-heading);
+  border: 1px solid rgba(var(--gt-blue-rgb), 0.35);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.sptube-saved-highlight:hover {
+  background: rgba(var(--gt-blue-rgb), 0.3);
+}
+
+.sptube-custom-badge {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--gt-green-heading);
+  background: rgba(var(--gt-green-rgb), 0.15);
+  border: 1px solid rgba(var(--gt-green-rgb), 0.35);
+  border-radius: 20px;
+  padding: 2px 6px;
+}
+
+.sptube-saved-edit,
+.sptube-saved-delete {
+  background: none;
+  border: 1px solid var(--gt-border);
+  color: var(--gt-text-faint);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.sptube-saved-edit:hover { color: var(--gt-sky); border-color: var(--gt-sky); }
+.sptube-saved-delete:hover { color: var(--gt-red); border-color: var(--gt-red-strong); }
+
+.sptube-saved-sentence {
+  margin-top: 5px;
+  padding-left: 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--gt-text-mid);
+}
+
+.sptube-saved-sentence-controls {
+  margin-top: 4px;
+}
+
+/* ── Sentence translation ───────────────────────────────────────────────── */
+.sptube-sentence-block {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gt-border);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.sptube-sentence-block::-webkit-scrollbar {
+  width: 4px;
+}
+.sptube-sentence-block::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sptube-sentence-block::-webkit-scrollbar-thumb {
+  background: var(--gt-border-soft);
+  border-radius: 2px;
+}
+
+.sptube-sentence-translation {
+  margin: 0;
+  color: var(--gt-text-dim);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Portion of the translation matching the clicked word */
+.sptube-context-highlight {
+  background: rgba(var(--gt-blue-rgb), 0.3);
+  color: var(--gt-blue-heading);
+  border-radius: 3px;
+  padding: 0 3px;
+  font-weight: 600;
+}
+
+/* ── Highlight editor (adjust which words are "the definition") ────────── */
+.sptube-sentence-controls {
+  margin-top: 4px;
+}
+
+.sptube-edit-highlight-btn {
+  background: none;
+  border: none;
+  color: var(--gt-text-mid);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.sptube-edit-highlight-btn:hover { color: var(--gt-blue-heading); text-decoration: underline; }
+
+.sptube-highlight-editing {
+  cursor: text;
+  user-select: text;
+  background: rgba(var(--gt-sky-rgb), 0.06);
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+}
+
+.sptube-highlight-hint {
+  font-size: 11px;
+  color: var(--gt-sky);
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+
+.sptube-highlight-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.sptube-highlight-save,
+.sptube-highlight-cancel {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.sptube-highlight-save {
+  background: rgba(var(--gt-sky-rgb), 0.15);
+  border: 1px solid rgba(var(--gt-sky-rgb), 0.5);
+  color: var(--gt-sky);
+}
+.sptube-highlight-save:hover { background: rgba(var(--gt-sky-rgb), 0.28); }
+.sptube-highlight-cancel {
+  background: none;
+  border: 1px solid var(--gt-border);
+  color: var(--gt-text-faint);
+}
+.sptube-highlight-cancel:hover { color: var(--gt-text); }
+
+/* ── Your-own-translation input ─────────────────────────────────────────── */
+.sptube-custom-block {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gt-border);
+}
+.sptube-custom-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--gt-text-faint);
+  margin-bottom: 6px;
+}
+.sptube-custom-row {
+  display: flex;
+  gap: 6px;
+}
+.sptube-custom-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--gt-bg-input);
+  border: 1px solid var(--gt-border);
+  border-radius: 7px;
+  padding: 6px 8px;
+  color: var(--gt-text);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.sptube-custom-input:focus { outline: none; border-color: var(--gt-blue); }
+.sptube-custom-save {
+  flex-shrink: 0;
+  background: rgba(var(--gt-blue-rgb), 0.18);
+  border: 1px solid rgba(var(--gt-blue-rgb), 0.4);
+  color: var(--gt-blue-heading);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.sptube-custom-save:hover { background: rgba(var(--gt-blue-rgb), 0.3); }
+
+/* ── Action buttons ─────────────────────────────────────────────────────── */
+.sptube-popup-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 8px;
+}
+
+.sptube-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.sptube-btn-learning {
+  background: rgba(var(--gt-gold-rgb), 0.1);
+  border-color: rgba(var(--gt-gold-rgb), 0.4);
+  color: var(--gt-gold);
+}
+.sptube-btn-learning:hover,
+.sptube-btn-learning.active {
+  background: rgba(var(--gt-gold-rgb), 0.25);
+  border-color: var(--gt-gold);
+  color: var(--gt-gold-heading);
+}
+
+.sptube-btn-known {
+  background: rgba(var(--gt-green-rgb), 0.08);
+  border-color: rgba(var(--gt-green-rgb), 0.3);
+  color: var(--gt-green);
+}
+.sptube-btn-known:hover,
+.sptube-btn-known.active {
+  background: rgba(var(--gt-green-rgb), 0.2);
+  border-color: var(--gt-green);
+  color: var(--gt-green-heading);
+}
+
+/* ── Save selection to Build Phrases ────────────────────────────────────── */
+.sptube-btn-buildphrase {
+  width: calc(100% - 28px);
+  margin: 0 14px 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px dashed rgba(var(--gt-sky-rgb), 0.5);
+  background: rgba(var(--gt-sky-rgb), 0.08);
+  color: var(--gt-sky);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.sptube-btn-buildphrase:hover:not(:disabled) {
+  background: rgba(var(--gt-sky-rgb), 0.18);
+  border-style: solid;
+}
+.sptube-btn-buildphrase:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+/* ── Save-another-meaning option ────────────────────────────────────────── */
+.sptube-save-variant {
+  padding: 0 14px 8px;
+}
+.sptube-btn-variant {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px dashed rgba(var(--gt-blue-rgb), 0.5);
+  background: rgba(var(--gt-blue-rgb), 0.08);
+  color: var(--gt-blue-heading);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sptube-btn-variant:hover {
+  background: rgba(var(--gt-blue-rgb), 0.18);
+  border-style: solid;
+}
+.sptube-variant-saved {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  color: var(--gt-green-heading);
+  padding: 6px 0;
+}
+
+/* ── Status label ───────────────────────────────────────────────────────── */
+.sptube-status-label {
+  padding: 6px 14px 10px;
+  font-size: 11px;
+  color: var(--gt-text-faint);
+  text-align: center;
+}
+.sptube-status-label strong {
+  color: var(--gt-blue);
+}
+
+/* ── Reading Mode on-page badge (any website) ─────────────────────────────── */
+.sptube-reader-badge {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 2147483645;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gt-bg-alt);
+  color: var(--gt-text-dim);
+  border: 1px solid var(--gt-border);
+  border-radius: 999px;
+  padding: 8px 10px 8px 14px;
+  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.sptube-reader-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gt-green);
+  flex-shrink: 0;
+}
+.sptube-reader-badge-off {
+  border: none;
+  background: rgba(var(--gt-veil-rgb), 0.06);
+  color: var(--gt-text-faint);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.15s;
+}
+.sptube-reader-badge-off:hover {
+  background: rgba(var(--gt-red-rgb), 0.18);
+  color: var(--gt-red);
+}
+
+/* ── Known / learning / new ratio stats ───────────────────────────────────
+   Shared between the Reading Mode badge (inline) and the standalone
+   YouTube-transcript badge below. */
+.sptube-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.sptube-stat i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.sptube-stat-known i { background: var(--gt-green); }
+.sptube-stat-learning i { background: var(--gt-gold); }
+.sptube-stat-new i { background: var(--gt-blue); }
+
+.sptube-stats-inline {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-left: 9px;
+  margin-left: 1px;
+  border-left: 1px solid var(--gt-border);
+}
+
+/* Standalone badge shown in the bottom corner while a YouTube transcript
+   panel with tracked words is open. */
+.sptube-stats-badge {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 2147483645;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--gt-bg-alt);
+  color: var(--gt-text-dim);
+  border: 1px solid var(--gt-border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.sptube-stats-badge-label {
+  color: var(--gt-text-mid);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-right: 1px;
+}
+
+/* ── "% known" video-grid scan ────────────────────────────────────────────
+   Opt-in floating button (bottom-left, so it doesn't collide with the
+   transcript ratio badge above) plus the small per-thumbnail result pills
+   it produces. Nothing here ever runs on its own — see content.js. */
+.sptube-scan-btn {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  z-index: 2147483645;
+  background: var(--gt-bg-alt);
+  color: var(--gt-text);
+  border: 1px solid var(--gt-border);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.15s, transform 0.1s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.sptube-scan-btn:hover:not(:disabled) { border-color: var(--gt-blue); transform: translateY(-1px); }
+.sptube-scan-btn:disabled { cursor: default; opacity: 0.85; }
+.sptube-scan-btn.scanning { color: var(--gt-text-dim); }
+
+/* These sit on top of thumbnail photos rather than our own themed surfaces,
+   so — same reasoning as the fixed word-highlight colors above — the badge
+   background stays a constant dark translucent chip (matching the look of
+   YouTube's own duration badge) instead of following light/dark mode. */
+.sptube-video-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 3;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  background: rgba(10, 15, 26, 0.85);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.sptube-video-badge-loading { color: #cbd5e1; font-weight: 600; letter-spacing: 1px; }
+.sptube-video-badge-high    { color: #86efac; box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.5) inset; }
+.sptube-video-badge-mid     { color: #f4d67e; box-shadow: 0 0 0 1px rgba(227, 187, 74, 0.5) inset; }
+.sptube-video-badge-low     { color: #fca5a5; box-shadow: 0 0 0 1px rgba(229, 62, 62, 0.5) inset; }
+.sptube-video-badge-none    { color: #94a3b8; font-weight: 600; }
+
+/* ── Quick Mark mode ───────────────────────────────────────────────────────
+   On-page pill toggling the "click/drag across words to instantly mark them
+   known" mode (see shared.js). Placed top-right so it never collides with
+   the bottom-corner stats/reader/scan badges. */
+.sptube-quickmark-pill {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 2147483645;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--gt-bg-alt);
+  color: var(--gt-text-dim);
+  border: 1px solid var(--gt-border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.15s, color 0.15s, transform 0.1s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.sptube-quickmark-pill:hover { border-color: var(--gt-green); transform: translateY(-1px); }
+.sptube-quickmark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gt-text-faint2);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.sptube-quickmark-pill.active {
+  color: var(--gt-green-heading);
+  border-color: var(--gt-green);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(var(--gt-green-rgb), 0.35) inset;
+}
+.sptube-quickmark-pill.active .sptube-quickmark-dot {
+  background: var(--gt-green);
+  box-shadow: 0 0 0 3px rgba(var(--gt-green-rgb), 0.25);
+}
+
+/* While Quick Mark is engaged (pill toggled on, or Shift held), swap the
+   word cursor to signal "painting" rather than "click to open a popup". */
+.sptube-quickmark-active .sptube-word {
+  cursor: crosshair !important;
+}
+
+/* Brief highlight on a word the instant a Quick Mark pass touches it;
+   removed again on pointer-up once reColor() runs. */
+.sptube-quick-marked {
+  box-shadow: 0 0 0 1px rgba(var(--gt-green-rgb), 0.8) !important;
+  background: rgba(var(--gt-green-rgb), 0.22) !important;
+  border-radius: 3px;
+}

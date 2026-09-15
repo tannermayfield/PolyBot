@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Gift of Tongues — Learn Any Language on YouTube & Anywhere",
+  "version": "1.26.0",
+  "description": "Already speak a language other than English? Set it as your native language, then pick any language to learn — including English itself — and click any word in YouTube transcripts or on-screen captions (or, with Reading Mode, any article, ebook, or video on the web) to get definitions in your own language and track your vocabulary. Select multiple words to save a phrase, type your own translations, edit highlights, browse everything in a scroll-free grid overview, see a live known/learning/new word ratio badge on transcripts and reading pages, check what percentage of a video's words you already know before you even click it, build & practice your own translated phrases with pronunciation recording in the Build Phrases tool, and import a custom voice from Voicebox to read your saved phrases aloud.",
+  "permissions": ["storage", "activeTab", "scripting", "unlimitedStorage"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://translate.googleapis.com/*",
+    "https://api.datamuse.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["languages.js", "shared.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

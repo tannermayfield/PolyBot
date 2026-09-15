@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gift of Tongues — Fast Catch-up</title>
+<style>
+  :root {
+    /* ── Surfaces ─────────────────────────────────────────────────────── */
+    --gt-bg: #12203a;
+    --gt-bg-alt: #17273f;
+    --gt-bg-alt2: #0f1c30;
+    --gt-bg-input: #0a1524;
+    --gt-border: #294564;
+    --gt-border-soft: #365a7e;
+    --gt-veil-rgb: 255,255,255;
+    --gt-track-off: #33334f;
+
+    /* ── Text ─────────────────────────────────────────────────────────── */
+    --gt-text: #edf2fb;
+    --gt-text-dim: #c4d3e5;
+    --gt-text-mid: #9db0c6;
+    --gt-text-faint: #7590a8;
+    --gt-text-faint2: #56697e;
+
+    /* ── Blue (primary accent — "new / not yet known" words) ────────────── */
+    --gt-blue: #5b9dff;
+    --gt-blue-heading: #8fc0ff;
+    --gt-blue-rgb: 91,157,255;
+    --gt-blue-solid: #2563eb;
+
+    /* ── Sky (secondary informational blue, kept distinct from accent) ──── */
+    --gt-sky: #93c5fd;
+    --gt-sky-rgb: 96,165,250;
+
+    /* ── Gold (learning words) ───────────────────────────────────────── */
+    --gt-gold: #e3bb4a;
+    --gt-gold-heading: #f4d67e;
+    --gt-gold-rgb: 227,187,74;
+
+    /* Fixed "on-page" word colors — see notes in styles.css; kept constant
+       across light/dark since they sit on host-page text we don't own. */
+    --gt-word-blue: #3b82f6;
+    --gt-word-blue-rgb: 59,130,246;
+    --gt-word-gold: #c9972e;
+    --gt-word-gold-rgb: 201,151,46;
+
+    /* ── Green (known words) ─────────────────────────────────────────── */
+    --gt-green: #4ade80;
+    --gt-green-heading: #86efac;
+    --gt-green-rgb: 34,197,94;
+
+    /* ── Red (destructive / delete) ──────────────────────────────────── */
+    --gt-red: #fc8181;
+    --gt-red-strong: #e53e3e;
+    --gt-red-rgb: 229,62,62;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --gt-bg: #f8f6ee;
+      --gt-bg-alt: #ffffff;
+      --gt-bg-alt2: #eef1f7;
+      --gt-bg-input: #ffffff;
+      --gt-border: #dbe1ea;
+      --gt-border-soft: #bfccdc;
+      --gt-veil-rgb: 10,20,35;
+      --gt-track-off: #ccd3dd;
+
+      --gt-text: #16233a;
+      --gt-text-dim: #33465e;
+      --gt-text-mid: #55697f;
+      --gt-text-faint: #798aa0;
+      --gt-text-faint2: #97a5b6;
+
+      --gt-blue: #1d4ed8;
+      --gt-blue-heading: #1e3a8a;
+      --gt-blue-rgb: 29,78,216;
+
+      --gt-gold: #93690b;
+      --gt-gold-heading: #6f4f08;
+      --gt-gold-rgb: 147,105,11;
+
+      --gt-green: #15803d;
+      --gt-green-heading: #166534;
+      --gt-green-rgb: 21,128,61;
+
+      --gt-red: #dc2626;
+      --gt-red-strong: #b91c1c;
+      --gt-red-rgb: 220,38,38;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    border-top: 3px solid var(--gt-gold);
+    background: var(--gt-bg);
+    color: var(--gt-text);
+    font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+    padding: 28px 20px 60px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  .logo { font-size: 30px; }
+  h1 { font-size: 22px; color: var(--gt-blue-heading); }
+  .intro {
+    color: var(--gt-text-mid);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 10px 0 26px;
+  }
+  .intro strong { color: var(--gt-text); }
+
+  .level-card {
+    background: var(--gt-bg-alt);
+    border: 1px solid var(--gt-border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    transition: border-color .15s;
+  }
+  .level-card.done {
+    border-color: rgba(var(--gt-green-rgb), 0.5);
+    background: rgba(var(--gt-green-rgb), 0.06);
+  }
+
+  .level-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .level-name { display: flex; align-items: baseline; gap: 10px; }
+  .level-num {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--gt-blue);
+    background: rgba(var(--gt-blue-rgb), 0.15);
+    border-radius: 6px;
+    padding: 3px 8px;
+  }
+  .level-title { font-size: 15px; font-weight: 700; }
+  .level-subtitle { font-size: 12px; color: var(--gt-text-faint); margin-top: 2px; }
+
+  .sample-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0 14px;
+  }
+  .sample-chip {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--gt-bg-alt2);
+    border: 1px solid var(--gt-border);
+    color: var(--gt-text-dim);
+  }
+
+  .level-actions { display: flex; align-items: center; gap: 10px; }
+  .know-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(var(--gt-green-rgb), 0.4);
+    background: rgba(var(--gt-green-rgb), 0.1);
+    color: var(--gt-green);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .know-btn:hover { background: rgba(var(--gt-green-rgb), 0.22); border-color: var(--gt-green); }
+  .done-label {
+    font-size: 13px;
+    color: var(--gt-green);
+    font-weight: 700;
+  }
+
+  .footer-note {
+    margin-top: 22px;
+    font-size: 12px;
+    color: var(--gt-text-faint);
+    line-height: 1.6;
+    text-align: center;
+  }
+  .back-link {
+    display: inline-block;
+    margin-top: 18px;
+    font-size: 13px;
+    color: var(--gt-blue);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .back-link:hover { text-decoration: underline; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--gt-bg-alt);
+    border: 1px solid rgba(var(--gt-green-rgb), 0.5);
+    color: var(--gt-text);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+  }
+  .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="logo">⚡</div>
+      <h1>Fast catch-up</h1>
+    </div>
+    <p class="intro">
+      Already know a good chunk of the language you're learning? Skip marking hundreds of words one at a time.
+      Each level below shows a sample of words at that frequency band. Find the
+      <strong>last level where you comfortably know every word like these</strong>, then tap its button —
+      that level and everything simpler gets marked <strong>known</strong> instantly.
+      (Words marked this way won't have a saved definition yet — that's fine, you can look one up later from the word manager.)
+    </p>
+
+    <div id="unavailable" style="display:none; color:var(--gt-text-mid); font-size:14px; line-height:1.7; padding:20px 0;"></div>
+
+    <div id="levels"></div>
+
+    <a class="back-link" id="closeLink">← Back</a>
+    <div class="footer-note">Already-marked "learning" words are left alone — this only fills in words you haven't touched yet.</div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="languages.js"></script>
+  <script src="frequency-data.js"></script>
+  <script src="catchup.js"></script>
+</body>
+</html>

@@ -485,7 +485,7 @@
   function voiceboxOriginPattern(baseUrl) {
     try {
       const u = new URL(baseUrl);
-      return `${u.protocol}//${u.hostname}${u.port ? ':' + u.port : ''}/*`;
+      return `${u.protocol}//${u.hostname}/*`;
     } catch (err) {
       return null;
     }

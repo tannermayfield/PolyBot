@@ -11,7 +11,7 @@ Vanilla JavaScript, Manifest V3. New full-tab entry: `studio.html`. Existing man
 
 ## Data API: window.StudioData (async unless stated otherwise)
 
-`init()` and `load()` return `{version:1, phrases:[], voices:[], attempts:[], reviews:{}, settings:{accentId:'es-MX',voiceboxUrl:'http://127.0.0.1:17493',assessmentUrl:'http://127.0.0.1:17494',assessmentEnabled:false}, vocabulary:[]}`.
+`init()` and `load()` return `{version:1, phrases:[], voices:[], attempts:[], reviews:{}, settings:{accentId:'es-MX',voiceboxUrl:'http://127.0.0.1:17493',assessmentUrl:'http://127.0.0.1:17494',assessmentEnabled:false,theme:'system'}, vocabulary:[]}`. Theme is `light`, `dark`, or `system`; it is included in backups and mirrored locally so the correct palette can be applied before first paint.
 
 The studio is Spanish-first. Vocabulary is derived from existing Spanish keys without modifying recognition/known status. Legacy Spanish phrases import idempotently on load; imported recordings become attempts and reference clips are retained. Import old Voicebox settings when available. Seed a small set of useful Spanish practice phrases if empty, clearly marked `source:'starter'`; never seed recordings, voices, scores or progress.
 
@@ -20,7 +20,7 @@ Records:
 - Phrase: `{id,text,translation,source:'starter'|'manual'|'web'|'video',sourceUrl?,createdAt,accentId?,references:[]}`.
 - Reference: `{id,label,kind:'original'|'voicebox'|'upload',audioUrl,voiceId?,accentId?,createdAt}`. Audio URLs are audio data URLs for persistence. Each generated voice reference is retained, not overwritten. User may import a local audio clip.
 - Voice: `{id,profileId,name,accentId,baseUrl,description?}`. Voicebox profile id maps to provider; `id` is local voice record id.
-- Attempt: `{id,phraseId,createdAt,audioUrl,duration,mode:'practice'|'test',accentId,referenceId?,referenceSnapshot?:{label,audioUrl,accentId?,start?,end?,text?},assessment?:AssessmentResult,selfRating?:'again'|'hard'|'good'|'easy'}`.
+- Attempt: `{id,phraseId,text,createdAt,audioUrl,duration,mode:'practice'|'test',accentId,referenceId?,referenceSnapshot?:{label,audioUrl,accentId?,start?,end?,text?},assessment?:AssessmentResult,selfRating?:'again'|'hard'|'good'|'easy'}`. `text` is the immutable expected/practice transcript captured when recording, including when no audio reference exists. Later assessment uses this snapshot, never a subsequently edited phrase. Legacy attempts can derive it from their original phrase during migration.
 - Vocabulary item: `{id,word,meaning,status,context?}`; use `matched` before `translation` from legacy definitions; keep words with no meaning visible, but do not quiz undefined meanings.
 - Review map key: `meaning:<vocabularyId>` or `speaking:<phraseId>`. Value: `{dueAt,intervalDays,repetitions,lastRating,reviewedAt}`.
 

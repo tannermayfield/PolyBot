@@ -9,8 +9,25 @@
 const cache = {};
 const DEFAULT_LANG = 'es';
 const DEFAULT_NATIVE_LANG = 'en';
+importScripts('study-data.js');
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+
+  if (msg.type === 'SAVE_STUDIO_PHRASE') {
+    saveStudioPhrase(msg, _sender)
+      .then(result => sendResponse({ ok: true, ...result }))
+      .catch(() => sendResponse({ ok: false, error: 'Could not save this phrase. Please try again.' }));
+    return true;
+  }
+
+  if (msg.type === 'OPEN_STUDIO') {
+    const id = typeof msg.phraseId === 'string' ? msg.phraseId.slice(0, 200) : '';
+    const page = msg.lang && msg.lang !== 'es' ? 'manager.html' : `studio.html${id ? '?phrase=' + encodeURIComponent(id) + '#practice' : ''}`;
+    chrome.tabs.create({ url: chrome.runtime.getURL(page) })
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
 
   if (msg.type === 'TRANSLATE_WORD_IN_CONTEXT') {
     const word = (msg.word || '').toLowerCase().trim();
@@ -86,6 +103,29 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   return false;
 });
+
+async function saveStudioPhrase(msg, sender) {
+  const text = typeof msg.text === 'string' ? msg.text.trim() : '';
+  const translation = typeof msg.translation === 'string' ? msg.translation.trim() : '';
+  if (!text || text.length > 2000 || translation.length > 4000) throw new Error('Invalid phrase');
+  const audio = msg.audioUrl;
+  if (audio && (typeof audio !== 'string' || audio.length > 12 * 1024 * 1024 || !/^data:audio\/[\w.+-]+(?:;[^,]*)?;base64,[A-Za-z0-9+/=\s]+$/.test(audio))) throw new Error('Invalid audio');
+  let sourceUrl = '';
+  try {
+    const url = new URL(sender.url || sender.tab?.url || '');
+    if (/^https?:$/.test(url.protocol)) { url.hash = ''; sourceUrl = url.href; }
+  } catch (_) { /* Source attribution is optional. */ }
+  const phrase = await StudioData.savePhrase({ text, translation, source: audio ? 'video' : 'web', sourceUrl });
+  if (audio) {
+    try {
+      await StudioData.addReference(phrase.id, { label: 'Original clip', kind: 'original', audioUrl: audio, createdAt: Date.now() });
+    } catch (_) {
+      // Text is already saved. Return its ID so a retry cannot duplicate it.
+      return { id: phrase.id, warning: 'The phrase was saved, but its audio could not be saved. Add a reference in the studio.' };
+    }
+  }
+  return { id: phrase.id };
+}
 
 // ── Reading Mode: persist reader.js as a content script for sites the user
 // has opted into, so it keeps running on future page loads there without

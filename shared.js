@@ -251,10 +251,12 @@
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
       if (changes[window.SPTubeLang.STORAGE_KEY_TARGET_LANG]) {
+        closePopup();
         loadVocabularyForLang(changes[window.SPTubeLang.STORAGE_KEY_TARGET_LANG].newValue || window.SPTubeLang.DEFAULT_LANG, reColor);
         return;
       }
       if (changes[window.SPTubeLang.STORAGE_KEY_NATIVE_LANG]) {
+        closePopup();
         nativeLang = changes[window.SPTubeLang.STORAGE_KEY_NATIVE_LANG].newValue || window.SPTubeLang.DEFAULT_NATIVE_LANG;
         return;
       }
@@ -271,9 +273,17 @@
     // phrase they've already found and translated on the page. Reads
     // current storage first rather than relying on a locally-cached copy,
     // since the manager tab may have written to it more recently.
-    function saveToBuildPhrases(targetText, englishText, videoClipDataUrl, callback) {
-      chrome.storage.local.get([storageKeys.phrases], (r) => {
-        const phrases = Array.isArray(r[storageKeys.phrases]) ? r[storageKeys.phrases] : [];
+    function saveToBuildPhrases(targetText, englishText, videoClipDataUrl, callback, captureLang = targetLang) {
+      if (captureLang === 'es') {
+        chrome.runtime.sendMessage({ type: 'SAVE_STUDIO_PHRASE', text: targetText, translation: englishText, audioUrl: videoClipDataUrl }, result => {
+          const error = chrome.runtime.lastError;
+          callback && callback(error || !result?.ok ? null : result.id, error?.message || result?.error, result?.warning);
+        });
+        return;
+      }
+      const captureKeys = window.SPTubeLang.storageKeys(captureLang);
+      chrome.storage.local.get([captureKeys.phrases], (r) => {
+        const phrases = Array.isArray(r[captureKeys.phrases]) ? r[captureKeys.phrases] : [];
         const record = {
           id: 'p' + Date.now() + Math.random().toString(36).slice(2, 8),
           english: englishText,
@@ -285,8 +295,8 @@
           videoClip: videoClipDataUrl || null, // short audio clip of how it actually sounded, if we managed to capture one
           savedAt: Date.now(),
         };
-        chrome.storage.local.set({ [storageKeys.phrases]: [record, ...phrases] }, () => {
-          callback && callback();
+        chrome.storage.local.set({ [captureKeys.phrases]: [record, ...phrases] }, () => {
+          callback && callback(record.id, chrome.runtime.lastError?.message);
         });
       });
     }
@@ -1261,7 +1271,7 @@
           <button class="sptube-btn sptube-btn-learning ${status === 'learning' ? 'active' : ''}" data-action="learning">📙 Learning</button>
           <button class="sptube-btn sptube-btn-known ${status === 'known' ? 'active' : ''}" data-action="known">✅ Know it</button>
         </div>
-        ${isPhrase ? `<button class="sptube-btn sptube-btn-buildphrase" data-action="build-phrase" style="display:none">📚 Save to Build Phrases</button>` : ''}
+        ${isPhrase ? `<button class="sptube-btn sptube-btn-buildphrase" data-action="build-phrase" style="display:none">${targetLang === 'es' ? 'Practice this phrase ↗' : 'Save to Build Phrases'}</button>` : ''}
         <div class="sptube-status-label">
           ${status !== 'unknown' ? `Marked: <strong>${status}</strong>` : 'Not yet categorized'}
         </div>
@@ -1315,6 +1325,8 @@
           ev.stopPropagation();
           if (!currentTranslation || !currentTranslation.translation || buildPhraseBtn.disabled) return;
           buildPhraseBtn.disabled = true;
+          const captureLang = targetLang;
+          const captureTranslation = currentTranslation.translation;
 
           const canCaptureClip = typeof hooks.captureVideoClip === 'function';
           buildPhraseBtn.textContent = canCaptureClip ? 'Grabbing the clip…' : 'Saving…';
@@ -1332,9 +1344,16 @@
             }
           }
 
-          saveToBuildPhrases(term, currentTranslation.translation, clipDataUrl, () => {
-            buildPhraseBtn.textContent = clipDataUrl ? '✓ Saved with a clip of the audio' : '✓ Saved to Build Phrases';
-          });
+          saveToBuildPhrases(term, captureTranslation, clipDataUrl, (id, error, warning) => {
+            if (error || !id) {
+              buildPhraseBtn.textContent = 'Could not save. Try again';
+              buildPhraseBtn.disabled = false;
+              return;
+            }
+            buildPhraseBtn.textContent = warning ? 'Phrase saved; add audio in the studio' : clipDataUrl ? 'Saved with original audio' : 'Saved for practice';
+            if (warning) buildPhraseBtn.title = warning;
+            if (captureLang === 'es') chrome.runtime.sendMessage({ type: 'OPEN_STUDIO', phraseId: id, lang: captureLang }, () => { void chrome.runtime.lastError; });
+          }, captureLang);
         });
       }
 
@@ -1371,7 +1390,7 @@
         : null;
       currentTranslation = result;
 
-      if (!activePopup || activeTerm !== term) return;
+      if (activePopup !== popup || activeTerm !== term) return;
       loadingEl.style.display = 'none';
 
       if (result && result.translation) {
@@ -1382,7 +1401,7 @@
         if (status2 === 'learning' || status2 === 'known') {
           const matched = extractMatched(result.translation, result.start, result.end);
           getSavedDefinitions(term, (list) => {
-            if (!activePopup || activeTerm !== term) return;
+            if (activePopup !== popup || activeTerm !== term) return;
             if (list.length === 0) {
               saveDefinition(term, sentence, result.translation, result.start, result.end);
               renderSavedMeanings(term, savedMeaningsEl, savedListEl);

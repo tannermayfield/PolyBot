@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f7f6f2">
+  <title>Gift of Tongues · Spanish studio</title>
+  <script src="studio-theme.js"></script>
+  <link rel="stylesheet" href="studio.css">
+  <script src="languages.js" defer></script>
+  <script src="study-data.js" defer></script>
+  <script src="study-audio.js" defer></script>
+  <script src="studio.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Studio navigation">
+      <a class="brand" href="#today" aria-label="Gift of Tongues home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>gift of tongues<span class="brand-sub">SPANISH STUDIO</span></span></a>
+      <div class="nav-label">YOUR SPACE</div>
+      <nav id="navigation">
+        <a href="#today" data-page="today"><span data-icon="sun"></span>Today</a>
+        <a href="#practice" data-page="practice"><span data-icon="wave"></span>Practice<span class="nav-tag">Studio</span></a>
+        <a href="#library" data-page="library"><span data-icon="library"></span>Library<span class="nav-count" id="library-count">0</span></a>
+        <a href="#voices" data-page="voices"><span data-icon="headphones"></span>Voices & accents</a>
+        <a href="#review" data-page="review"><span data-icon="cards"></span>Flashcards<span class="nav-count" id="review-count">0</span></a>
+        <a href="#progress" data-page="progress"><span data-icon="chart"></span>Progress</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="accent-caption"><span class="status-dot"></span>YOUR REFERENCE ACCENT</div>
+        <label class="sr-only" for="global-accent">Reference accent</label><select id="global-accent"></select>
+        <p class="sidebar-note">A little listening.<br>A little closer, every day.</p>
+        <a class="legacy-link" href="manager.html" target="_blank" rel="noopener">Vocabulary manager <span data-icon="external"></span></a>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><span class="breadcrumb">Gift of Tongues <span>/</span> <strong id="page-label">Today</strong></span><div class="topbar-right"><span class="local-badge"><span class="status-dot"></span>Saved on this device</span><button class="icon-button" type="button" data-action="open-settings" aria-label="Open studio settings" title="Studio settings"><span data-icon="settings"></span></button></div></header>
+      <main id="main" tabindex="-1"><div class="loading-state">Opening your studio…</div></main>
+      <footer class="app-footer"><span>Spanish, in your own voice.</span><span>Listen. Imitate. Make it yours.</span></footer>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="editor-dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+  <input id="backup-file" type="file" accept="application/json,.json" hidden>
+</body>
+</html>

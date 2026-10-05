@@ -22,7 +22,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === 'OPEN_STUDIO') {
     const id = typeof msg.phraseId === 'string' ? msg.phraseId.slice(0, 200) : '';
-    const page = msg.lang && msg.lang !== 'es' ? 'manager.html' : `studio.html${id ? '?phrase=' + encodeURIComponent(id) + '#practice' : ''}`;
+    const page = msg.lang && msg.lang !== 'es' ? 'studio.html#vocabulary' : `studio.html${id ? '?phrase=' + encodeURIComponent(id) + '#pronunciation' : '#my-path'}`;
     chrome.tabs.create({ url: chrome.runtime.getURL(page) })
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
@@ -59,6 +59,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       ? synonymPhraseDirect(text, lang)
       : translateWordDirect(text, lang, nativeLang);
     task
+      .then(r => { cache[key] = r; sendResponse(r); })
+      .catch(() => { cache[key] = null; sendResponse(null); });
+    return true;
+  }
+
+  if (msg.type === 'TRANSLATE_DICTIONARY_AUTO') {
+    const text = (msg.text || '').trim();
+    const targetLang = validLanguageCode(msg.targetLang) || DEFAULT_LANG;
+    const nativeLang = validLanguageCode(msg.nativeLang) || DEFAULT_NATIVE_LANG;
+    if (!text) { sendResponse(null); return false; }
+    const key = 'dictionary::' + targetLang + '::' + nativeLang + '::' + text;
+    if (cache[key] !== undefined) { sendResponse(cache[key]); return false; }
+
+    translateDictionaryAuto(text, targetLang, nativeLang)
       .then(r => { cache[key] = r; sendResponse(r); })
       .catch(() => { cache[key] = null; sendResponse(null); });
     return true;
@@ -311,6 +325,77 @@ async function translateBetween(text, sourceLang, targetLang) {
   const data = await res.json();
   const parts = (data[0] || []).map(s => s?.[0] || '').join('');
   return parts.trim() || null;
+}
+
+function validLanguageCode(value) {
+  return typeof value === 'string' && /^[a-z]{2,3}(?:-[a-z]{2,4})?$/i.test(value) ? value : '';
+}
+
+function languageMatches(detected, configured) {
+  if (!validLanguageCode(detected) || !validLanguageCode(configured)) return false;
+  const detectedCode = detected.toLowerCase().replace('_', '-');
+  const configuredCode = configured.toLowerCase().replace('_', '-');
+  return detectedCode === configuredCode || detectedCode.split('-')[0] === configuredCode.split('-')[0];
+}
+
+function detectWithChrome(text) {
+  const detector = chrome.i18n && chrome.i18n.detectLanguage;
+  if (typeof detector !== 'function') return Promise.resolve(null);
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      const languages = result && Array.isArray(result.languages) ? result.languages : [];
+      const candidates = languages
+        .filter(item => item && validLanguageCode(item.language))
+        .sort((a, b) => (Number(b.percentage) || 0) - (Number(a.percentage) || 0));
+      resolve(candidates.length ? candidates : null);
+    };
+    try {
+      const returned = detector.call(chrome.i18n, text, result => {
+        try { if (chrome.runtime.lastError) { finish(null); return; } } catch (_) { /* Ignore runtime shims. */ }
+        finish(result);
+      });
+      if (returned && typeof returned.then === 'function') returned.then(finish, () => finish(null));
+    } catch (_) { finish(null); }
+  });
+}
+
+function detectByScript(text, targetLang, nativeLang) {
+  const scripts = [
+    [/[぀-ヿ㐀-鿿]/u, ['ja', 'zh']],
+    [/[가-힯]/u, ['ko']],
+    [/[؀-ۿ]/u, ['ar']],
+    [/[֐-׿]/u, ['he']],
+    [/[Ѐ-ӿ]/u, ['ru', 'uk']],
+    [/[Ͱ-Ͽ]/u, ['el']],
+    [/[ऀ-ॿ]/u, ['hi']],
+    [/[฀-๿]/u, ['th']]
+  ];
+  for (const [pattern, codes] of scripts) {
+    if (!pattern.test(text)) continue;
+    if (codes.some(code => languageMatches(code, targetLang))) return targetLang;
+    if (codes.some(code => languageMatches(code, nativeLang))) return nativeLang;
+  }
+  return null;
+}
+
+async function translateDictionaryAuto(text, targetLang, nativeLang) {
+  if (languageMatches(targetLang, nativeLang)) {
+    return { translation: await synonymPhraseDirect(text, targetLang), sourceLang: targetLang, targetLang: nativeLang, detection: 'same-language' };
+  }
+  const candidates = await detectWithChrome(text);
+  const detected = candidates && candidates.find(item => languageMatches(item.language, targetLang) || languageMatches(item.language, nativeLang));
+  const sourceLang = detected
+    ? (languageMatches(detected.language, nativeLang) ? nativeLang : targetLang)
+    : (detectByScript(text, targetLang, nativeLang) || targetLang);
+  const destinationLang = languageMatches(sourceLang, nativeLang) ? targetLang : nativeLang;
+  return {
+    translation: await translateBetween(text, sourceLang, destinationLang),
+    sourceLang, targetLang: destinationLang,
+    detection: detected ? 'chrome' : (detectByScript(text, targetLang, nativeLang) ? 'script' : 'fallback')
+  };
 }
 
 // ── Same-language mode: synonyms instead of translation ────────────────────

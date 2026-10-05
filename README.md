@@ -1,30 +1,32 @@
-# Gift of Tongues — Spanish Shadowing Studio
+# Gift of Tongues — Language Learning
 
-A Manifest V3 Chrome extension for turning words and phrases from the web into Spanish speaking practice. The full-tab studio includes regional Voicebox profiles, original audio clips, recording and comparison, vocabulary flashcards, speaking reviews, and attempt history.
+A Manifest V3 Chrome extension that turns words and phrases from the web into a balanced language-learning workspace. The app brings vocabulary, grammar, pronunciation, and saved media together around a structured **My Path** experience for every supported target language.
 
 ## Run the extension
 
 1. Open Chrome's extensions page (`chrome://extensions`) and enable Developer mode.
 2. Choose **Load unpacked** and select this project folder. For an existing installation, choose **Reload** after updating these files.
-3. Open the extension popup, then **Open shadowing studio**. Allow microphone access when you first record.
-4. On a website, turn on word recognition from the popup. Select a phrase on the page or in YouTube captions and choose **Practice this phrase**. Where clip capture is available, the original audio accompanies the phrase.
+3. Open the extension popup, then **Open My Path**. Choose the language you are learning and the language used for explanations in Settings.
+4. On a website, turn on word recognition from the popup. Select a word or phrase on the page or in YouTube captions to save it. Spanish phrase captures can open directly in the advanced pronunciation studio with original audio when clip capture is available.
 
-Existing vocabulary, language settings, definitions, phrase recordings, and the vocabulary editor remain available. The studio imports Spanish phrases and recordings without deleting the original stores. Other languages remain supported by the existing reading and vocabulary tools.
+Existing vocabulary, language settings, definitions, and phrase recordings remain available. Vocabulary is kept separate for each language. The app imports Spanish phrases and recordings without deleting the original stores.
 
-## A practice session
+## Learning resources
 
-- Choose an accent and a phrase. Add an original audio clip or generate a reference with one of your Voicebox profiles.
-- Listen, adjust speed, and loop a short segment. Confirm the practice text matches the segment before recording.
-- Shadow along with playback, then record an independent attempt with the reference muted.
-- Compare recordings, retry, and rate the phrase for a later speaking review. Test mode keeps the reference hidden until the initial attempt.
-- Meaning flashcards and speaking reviews have separate schedules. Progress comes from saved attempts, with no example scores or invented activity.
+- **My Path** organizes a balanced sequence across vocabulary, grammar, pronunciation, and media. The future AI lesson builder is labeled as planned; this version does not simulate generated lessons.
+- **Vocabulary** starts with an English ↔ target-language dictionary, then separates All My Words, My Vocab Lists, and vocabulary practice.
+- **Grammar** shows every principle directly under Beginner, Intermediate, or Advanced. Each principle includes a notice, transform, and create self-guided practice routine.
+- **Pronunciation** contains Shadowing and Phrase Library. Accent, region, and Voicebox options expand under each language in Settings; advanced tools currently support Spanish.
+- **Media** separates provided Read and Listen material from Your Media, which contains browser extension captures. Provided libraries include interactive and care-free activities.
+- **Home** keeps the guided course at the top and shows vocabulary, grammar, and assessed pronunciation progress below it.
+- **Personalization** contains learning method, interests, and regional preferences.
 - Choose Light, Dark, or Use device setting in studio settings. The theme applies to every studio page and is included in studio backups.
 
 Starter phrases contain text only. Browser speech playback, where available, is a general synthetic reference; a region selection alone cannot guarantee a regional voice.
 
 ## Voicebox
 
-Create voice profiles in your local Voicebox app. In **Voices**, connect to its server (normally `http://127.0.0.1:17493`), assign profiles to accents, and generate reference recordings. You can also upload short audio recordings. Review generated speech before using it as a regional reference. Saved reference recordings stay available when Voicebox is offline.
+Create voice profiles in your local Voicebox app. In **Regions & Accents**, choose the Spanish region you want to explore. Then open pronunciation settings to connect to Voicebox (normally `http://127.0.0.1:17493`), assign profiles to accents, and generate reference recordings. Saved references remain available while Voicebox is offline.
 
 ## Optional pronunciation assessment
 
@@ -46,4 +48,4 @@ Preview opens at `http://127.0.0.1:4173` and uses a separate local browser store
 
 The optional browser smoke script uses Playwright and an installed Chromium browser; see [docs/verification.md](docs/verification.md). The assessment service has its own configuration instructions in `server/README.md`.
 
-Use the studio's export/import controls for studio recordings, references, schedules, and settings. The legacy vocabulary editor retains its all-language vocabulary backup controls. Keep both exports when backing up the complete extension.
+Use the studio's export/import controls for studio recordings, references, schedules, and settings. Vocabulary captured from websites remains in its existing per-language browser stores.

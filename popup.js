@@ -22,7 +22,7 @@ function refresh() {
 // ── Language selector ────────────────────────────────────────────────────
 function applyLangToUi(info) {
   document.getElementById('headerFlag').textContent = info.code.toUpperCase();
-  document.getElementById('headerSub').textContent = info.code === 'es' ? 'Spanish, in your own rhythm.' : `Collect ${info.name}. Practice Spanish.`;
+  document.getElementById('headerSub').textContent = `${info.name}, one balanced path.`;
   document.getElementById('openCatchupBtn').disabled = !window.SPTubeLang.CATCHUP_SUPPORTED[info.code];
   const catchupSub = document.getElementById('catchupSub');
   if (catchupSub) {
@@ -76,21 +76,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // ── Links to the full-page word manager & fast catch-up tool ───────────────
 document.getElementById('openManagerBtn').addEventListener('click', () => {
-  window.open(chrome.runtime.getURL(LANG === 'es' ? 'studio.html#library' : 'manager.html'), '_blank');
-});
-
-document.getElementById('legacyManagerBtn').addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('manager.html'), '_blank');
+  window.open(chrome.runtime.getURL('studio.html#vocabulary'), '_blank');
 });
 
 document.getElementById('openStudioBtn').addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('studio.html'), '_blank');
+  window.open(chrome.runtime.getURL('studio.html#my-path'), '_blank');
 });
 
 if (window.StudioData) {
   window.StudioData.load().then(state => {
     const count = window.StudioData.dueItems(state, 'speaking').length;
-    document.getElementById('practiceNote').textContent = count ? `${count} phrase${count === 1 ? '' : 's'} ready to practice` : 'Your next five minutes, well spent.';
+    document.getElementById('practiceNote').textContent = count ? `${count} pronunciation phrase${count === 1 ? '' : 's'} ready` : 'Vocabulary · Grammar · Pronunciation · Media';
   }).catch(() => {});
 }
 

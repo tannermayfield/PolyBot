@@ -91,7 +91,7 @@
       <p style="margin-bottom:10px;">Fast catch-up isn't available for <strong>${escHtml(langInfo.name)}</strong> yet —
       it needs a word-frequency list for that language, and only Spanish has one built in so far.</p>
       <p>You can still mark words known/learning individually as you go, or use the
-      <a href="manager.html" style="color:var(--gt-blue)" target="_blank">word manager</a> to build up your vocabulary.</p>
+      <a href="studio.html#vocabulary" style="color:var(--gt-blue)" target="_blank">Vocabulary</a> to review what you have saved.</p>
     `;
   }
 

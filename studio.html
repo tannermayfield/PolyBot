@@ -5,39 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f7f6f2">
-  <title>Gift of Tongues · Spanish studio</title>
+  <title>Gift of Tongues · Home</title>
   <script src="studio-theme.js"></script>
   <link rel="stylesheet" href="studio.css">
+  <link rel="stylesheet" href="personalization-home.css">
+  <link rel="stylesheet" href="header-layout.css">
+  <link rel="stylesheet" href="header-mobile-fix.css">
+  <link rel="stylesheet" href="settings-icon.css">
+  <link rel="stylesheet" href="personalization-method.css">
+  <link rel="stylesheet" href="personalization-interests.css">
+  <link rel="stylesheet" href="personalization-regions.css">
   <script src="languages.js" defer></script>
+  <script src="learning-data.js" defer></script>
   <script src="study-data.js" defer></script>
   <script src="study-audio.js" defer></script>
+  <script src="personalization-method.js" defer></script>
+  <script src="personalization-interests.js" defer></script>
+  <script src="personalization-regions.js" defer></script>
   <script src="studio.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="app-shell">
+    <header class="topbar"><a class="brand" href="#home" aria-label="Gift of Tongues home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>gift of tongues<span class="brand-sub">LANGUAGE LEARNING</span></span></a><div class="topbar-right"><button class="icon-button" type="button" data-action="open-settings" aria-label="Open language learning settings" title="Settings"><span data-icon="settings"></span></button></div></header>
     <aside class="sidebar" aria-label="Studio navigation">
-      <a class="brand" href="#today" aria-label="Gift of Tongues home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>gift of tongues<span class="brand-sub">SPANISH STUDIO</span></span></a>
-      <div class="nav-label">YOUR SPACE</div>
       <nav id="navigation">
-        <a href="#today" data-page="today"><span data-icon="sun"></span>Today</a>
-        <a href="#practice" data-page="practice"><span data-icon="wave"></span>Practice<span class="nav-tag">Studio</span></a>
-        <a href="#library" data-page="library"><span data-icon="library"></span>Library<span class="nav-count" id="library-count">0</span></a>
-        <a href="#voices" data-page="voices"><span data-icon="headphones"></span>Voices & accents</a>
-        <a href="#review" data-page="review"><span data-icon="cards"></span>Flashcards<span class="nav-count" id="review-count">0</span></a>
-        <a href="#progress" data-page="progress"><span data-icon="chart"></span>Progress</a>
+        <a class="my-path-link" href="#my-path" data-page="my-path"><span data-icon="signpost"></span><span><strong>My Path</strong><small>Your guided course</small></span></a>
+        <a href="#personalization" data-page="personalization"><span data-icon="sun"></span>Personalization</a>
+        <div class="nav-label resource-nav-label">EXPLORE RESOURCES</div>
+        <a href="#vocabulary" data-page="vocabulary"><span data-icon="cards"></span>Vocabulary<span class="nav-count" id="review-count">0</span></a>
+        <a href="#grammar" data-page="grammar"><span data-icon="library"></span>Grammar</a>
+        <a href="#pronunciation" data-page="pronunciation"><span data-icon="wave"></span>Pronunciation<span class="nav-count" id="library-count">0</span></a>
+        <a href="#media" data-page="media"><span data-icon="headphones"></span>Media</a>
       </nav>
       <div class="sidebar-bottom">
-        <div class="accent-caption"><span class="status-dot"></span>YOUR REFERENCE ACCENT</div>
-        <label class="sr-only" for="global-accent">Reference accent</label><select id="global-accent"></select>
-        <p class="sidebar-note">A little listening.<br>A little closer, every day.</p>
-        <a class="legacy-link" href="manager.html" target="_blank" rel="noopener">Vocabulary manager <span data-icon="external"></span></a>
+        <div class="language-context"><span class="status-dot"></span><span id="language-context-label">STUDYING NOW</span></div>
+        <label class="sr-only" for="study-language-switch">Language to study now</label>
+        <select id="study-language-switch" aria-label="Language to study now"></select>
+        <p class="sidebar-note" id="language-context-note">Choose your target languages in settings.</p>
       </div>
     </aside>
     <div class="workspace">
-      <header class="topbar"><span class="breadcrumb">Gift of Tongues <span>/</span> <strong id="page-label">Today</strong></span><div class="topbar-right"><span class="local-badge"><span class="status-dot"></span>Saved on this device</span><button class="icon-button" type="button" data-action="open-settings" aria-label="Open studio settings" title="Studio settings"><span data-icon="settings"></span></button></div></header>
-      <main id="main" tabindex="-1"><div class="loading-state">Opening your studio…</div></main>
-      <footer class="app-footer"><span>Spanish, in your own voice.</span><span>Listen. Imitate. Make it yours.</span></footer>
+      <main id="main" tabindex="-1"><div class="loading-state">Opening your learning space…</div></main>
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

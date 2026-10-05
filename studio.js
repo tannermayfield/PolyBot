@@ -1,12 +1,13 @@
-/* Spanish shadowing studio: vanilla JS, local recordings, explicit cloud assessment. */
+/* Balanced language-learning shell with a Spanish pronunciation studio. */
 (() => {
 'use strict';
-const D = window.StudioData, A = window.StudioAudio;
+const D = window.StudioData, A = window.StudioAudio, L = window.LearningData;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const paths = {
 sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/>',
+signpost:'<path d="M10 22V4m0 2H3l-2 3 2 3h7m0-8h8l3 3-3 3h-8m-3 12h6"/>',
 wave:'<path d="M3 10v4m4-8v12m5-16v20m5-16v12m4-9v6"/>',
 library:'<path d="M4 4h4v16H4zM10 4h4v16h-4zM17 4l4 15-3 1-4-15z"/>',
 headphones:'<path d="M4 13v-1a8 8 0 0 1 16 0v1M4 12H3v7h4v-7zm16 0h1v7h-4v-7z"/>',
@@ -20,10 +21,11 @@ const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 const btn = (action, label, name, variant = '', attrs = '') => `<button type="button" class="button ${variant}" data-action="${action}" ${attrs}>${name ? icon(name) : ''}${label}</button>`;
 const note = (text, kind = '') => `<div class="inline-note ${kind}">${icon('info')}<span>${text}</span></div>`;
 const empty = (title, text, action = '') => `<div class="empty-state"><div class="empty-icon">${icon('wave')}</div><h3>${esc(title)}</h3><p>${esc(text)}</p>${action}</div>`;
-const heading = (title, subtitle, action = '', eyebrow = 'YOUR SPANISH STUDIO') => `<div class="page-heading"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subtitle">${subtitle}</p></div>${action}</div>`;
-const pages = {today:'Today',practice:'Practice',library:'Library',voices:'Voices & accents',review:'Flashcards',progress:'Progress'};
-let state, page = 'today', operation = false, toastTimer, pendingReload = 0;
-const ui = {search:'',source:'all',profiles:[],profilesUrl:'',reviewKind:'meaning',reviewId:null,revealed:false,reviewed:new Set(),comparison:null,attemptId:null,assessments:new Set()};
+const heading = (title, subtitle, action = '', eyebrow = 'YOUR LEARNING SPACE') => `<div class="page-heading"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subtitle">${subtitle}</p></div>${action}</div>`;
+const pages = {home:'Home',personalization:'Personalization','learning-method':'Your Learning Method',interests:'Your Interests',regions:'Regions & Accents','my-path':'My Path',vocabulary:'Vocabulary',grammar:'Grammar',pronunciation:'Pronunciation',media:'Media'};
+const aliases = {today:['my-path','overview'],review:['vocabulary','review'],practice:['pronunciation','practice'],library:['pronunciation','library'],progress:['home',null]};
+let state, learning, page = 'home', operation = false, toastTimer, pendingReload = 0, mountedPersonalization = null;
+const ui = {search:'',source:'all',profiles:[],profilesUrl:'',reviewKind:'meaning',reviewId:null,revealed:false,reviewed:new Set(),comparison:null,attemptId:null,assessments:new Set(),pronunciationTab:'overview',dictionaryResult:null,vocabPractice:'list',grammarTopic:null,mediaResponse:null,resourceView:'home'};
 const p = {phraseId:null,referenceId:null,mode:'practice',translation:false,text:'',start:0,end:0,duration:0,speed:1,loop:false,confirmed:false,testAttemptId:null,recording:false,starting:false,saving:false,generating:false,recorder:null,timer:null,startedAt:0};
 const player = new Audio(); player.preload = 'metadata';
 let playback = {role:null,url:'',start:0,end:0,loop:false,token:0}, generationController = null, recordingSnapshot = null;
@@ -38,11 +40,26 @@ const sec = n => Number.isFinite(Number(n)) ? Number(n).toFixed(1) + 's' : '—'
 const when = value => { const d = new Date(value); return Number.isNaN(d.getTime()) ? 'Unknown date' : d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); };
 const clock = value => { const d = new Date(value); return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); };
 const clipTime = n => `${Math.floor(Math.max(0,n || 0)/60)}:${String(Math.floor(Math.max(0,n || 0)%60)).padStart(2,'0')}`;
-const sourceLabel = source => ({starter:'Starter phrase',manual:'Your phrase',web:'From the web',video:'From a video'}[source] || 'Saved phrase');
+const sourceLabel = source => ({starter:'Starter phrase',manual:'Your phrase',web:'From the web',video:'From a video',provided:'Provided practice'}[source] || 'Saved phrase');
 const safeLink = value => { try { const u = new URL(value); return ['http:','https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } };
 const isAudio = value => typeof value === 'string' && /^data:audio\/[a-z0-9.+-]+(?:;[^,]*)?,/i.test(value);
 const accentOptions = selected => D.ACCENTS.map(a => `<option value="${esc(a.id)}"${a.id === selected ? ' selected' : ''}>${esc(a.label)}</option>`).join('');
 const option = (value,label,selected) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`;
+const languages = () => window.SPTubeLang?.LANGUAGES || [];
+const languageOptions = selected => languages().map(item => `<option value="${esc(item.code)}"${item.code === selected ? ' selected' : ''}>${esc(item.name)}</option>`).join('');
+const targetLang = () => learning?.target || {code:'es',name:'Spanish',speechLang:'es-ES',rtl:false};
+const nativeLang = () => learning?.native || {code:'en',name:'English',speechLang:'en-US',rtl:false};
+const targetLanguages = () => learning?.targetLanguages?.length ? learning.targetLanguages : [targetLang()];
+const isSpanish = () => targetLang().code === 'es';
+const languageByCode = code => [targetLang(),nativeLang()].find(item => item.code === code) || {code,name:code || 'Language',rtl:false};
+function resolveRoute(value) {
+  if(pages[value]) return [value,null];
+  return aliases[value] || ['home',null];
+}
+async function loadLearning() {
+  if(L?.load) return L.load();
+  return {target:{code:'es',name:'Spanish',speechLang:'es-ES',rtl:false},native:{code:'en',name:'English',speechLang:'en-US',rtl:false},vocabulary:state?.vocabulary || [],grammarTopics:[],path:[],media:[]};
+}
 function notify(message,error = false) { const node = $('#toast'); clearTimeout(toastTimer); node.textContent = String(message); node.classList.toggle('error',error); node.hidden = false; toastTimer = setTimeout(() => {node.hidden = true;}, error ? 10000 : 4500); }
 function report(error) {
   // A rapid pause/stop can reject play() after the user has already moved on.
@@ -55,8 +72,14 @@ function report(error) {
 }
 function shell() {
   $$('#navigation a').forEach(link => { const active = link.dataset.page === page; link.classList.toggle('active',active); active ? link.setAttribute('aria-current','page') : link.removeAttribute('aria-current'); });
-  $('#page-label').textContent = pages[page]; $('#library-count').textContent = state.phrases.length; $('#review-count').textContent = D.dueItems(state,'meaning').length;
-  $('#global-accent').innerHTML = accentOptions(state.settings.accentId); $('#global-accent').disabled = busy(); document.title = `${pages[page]} · Gift of Tongues`;
+  $('#library-count').textContent = isSpanish() ? state.phrases.length : (learning?.media?.length || 0); $('#review-count').textContent = learning?.vocabulary?.length || 0;
+  $('#language-context-label').textContent = 'STUDYING NOW';
+  const switcher = $('#study-language-switch');
+  switcher.innerHTML = targetLanguages().map(item => option(item.code,item.name,targetLang().code)).join('');
+  switcher.disabled = targetLanguages().length < 2;
+  $('#language-context-note').textContent = targetLanguages().length < 2 ? `Add target languages in Settings · meanings in ${nativeLang().name}` : `Meanings in ${nativeLang().name}`;
+  document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr';
+  document.title = `${pages[page]} · Gift of Tongues`;
 }
 function initPhrase(id) {
   const item = state.phrases.find(item => item.id === id) || D.dueItems(state,'speaking')[0] || state.phrases[0]; stopAudio();
@@ -65,20 +88,146 @@ function initPhrase(id) {
 }
 function render() {
   if(!state) return; if(p.phraseId && !phrase()) initPhrase(); shell();
-  $('#main').innerHTML = ({today:renderToday,practice:renderPractice,library:renderLibrary,voices:renderVoices,review:renderReview,progress:renderProgress}[page])();
-  if(page === 'practice') { prepareReference(); recordingUI(); }
+  mountedPersonalization?.unmount?.(); mountedPersonalization = null;
+  const module = {'learning-method':window.PersonalizationMethod,interests:window.PersonalizationInterests,regions:window.PersonalizationRegions}[page];
+  if(module) {
+    const ctx = {target:targetLang(),notify};
+    $('#main').innerHTML = `<div id="personalization-view">${module.render(ctx)}</div>`;
+    const cleanup = module.mount($('#personalization-view'),ctx);
+    mountedPersonalization = typeof cleanup === 'function' ? {unmount:cleanup} : module;
+  } else $('#main').innerHTML = ({home:renderHome,personalization:renderPersonalization,'my-path':renderMyPath,vocabulary:renderVocabulary,grammar:renderGrammar,pronunciation:renderPronunciation,media:renderMedia}[page])();
+  const lockedHub = page === 'home' || page === 'personalization' || (page === 'my-path' && ui.resourceView === 'home') || (page === 'vocabulary' && ui.resourceView === 'home') || (page === 'pronunciation' && ui.pronunciationTab === 'overview') || (page === 'media' && ui.resourceView === 'home');
+  document.body.classList.toggle('hub-locked',lockedHub);
+  $('#main').classList.toggle('hub-shell',lockedHub);
+  if(lockedHub) window.scrollTo(0,0);
+  if(page === 'pronunciation' && ui.pronunciationTab === 'practice' && isSpanish()) { prepareReference(); recordingUI(); }
 }
 function go(next,id) {
   if(busy()) return notify('Finish your recording or audio request first.'); stopAudio(); if(id) initPhrase(id);
-  const changed = page !== next; page = pages[next] ? next : 'today';
+  const resolved = resolveRoute(next), changed = page !== resolved[0]; page = resolved[0]; if(changed || next === page) { ui.resourceView = 'home'; ui.grammarTopic = null; ui.mediaResponse = null; ui.pronunciationTab = 'overview'; } if(resolved[1]) ui.pronunciationTab = resolved[1];
   if(location.hash !== `#${page}`) history.pushState(null,'',`${location.pathname}${location.search}#${page}`); render();
   if(changed) { window.scrollTo(0,0); $('#main').focus({preventScroll:true}); }
 }
-async function reload(paint = true) { state = await D.load(); window.StudioTheme?.apply(state.settings.theme || 'system'); paint ? render() : shell(); }
+async function reload(paint = true) { [state,learning] = await Promise.all([D.load(),loadLearning()]); window.StudioTheme?.apply(state.settings.theme || 'system'); paint ? render() : shell(); }
 async function mutate(callback,message,paint = true) {
   if(operation) return; operation = true;
-  try { const result = await callback(); state = await D.load(); window.StudioTheme?.apply(state.settings.theme || 'system'); if(message) notify(message); return result; }
+  try { const result = await callback(); [state,learning] = await Promise.all([D.load(),loadLearning()]); window.StudioTheme?.apply(state.settings.theme || 'system'); if(message) notify(message); return result; }
   finally {operation = false; paint ? render() : shell();}
+}
+async function mutateLearning(callback,message) {
+  if(!L) throw new Error('Learning data is unavailable. Reload the extension and try again.');
+  if(operation) return; operation = true;
+  try { await callback(); learning = await L.load(); if(message) notify(message); }
+  finally { operation = false; render(); }
+}
+const feature = (action,title,description,name,attrs = '') => `<button type="button" class="feature-choice" data-action="${action}" ${attrs}><span class="feature-icon">${icon(name)}</span><span class="feature-copy"><strong>${title}</strong><span>${description}</span></span><span class="feature-arrow">${icon('arrow')}</span></button>`;
+const hubHeading = (title,subtitle,eyebrow = 'YOUR LEARNING SPACE') => `<header class="hub-header"><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p>${subtitle}</p></header>`;
+const hubLink = (route,title,description,name,meta = '') => `<a class="feature-choice hub-link" href="#${route}"><span class="feature-icon">${icon(name)}</span><span class="feature-copy"><strong>${title}</strong><span>${description}</span>${meta ? `<small>${meta}</small>` : ''}</span><span class="feature-arrow">${icon('arrow')}</span></a>`;
+const back = (label) => `<div class="feature-back">${btn('resource-home',`← ${label}`,null)}</div>`;
+function featureFocus() { window.scrollTo(0,0); $('#main').focus({preventScroll:true}); }
+const personalizationItems = [
+  ['learning-method','Your Learning Method','Discover your balance of listening and doing, explore grammar your way, and choose how you like to practice.','cards','01','Find your approach'],
+  ['interests','Your Interests','From food and travel to science and sport, choose up to 10 interests to shape future examples and scenarios.','sun','02','Choose your interests'],
+  ['regions','Regions & Accents','Explore the Spanish-speaking world. Get to know regional expressions and find a voice you connect with.','globe','03','Explore Spanish accents']
+];
+function renderPersonalizationCards() {
+  return personalizationItems.map(([route,title,description,symbol,index,cta]) => `<a class="card home-personalization-card" href="#${route}"><div class="home-card-top"><span class="home-card-icon">${icon(symbol)}</span><span>${index}</span></div><h3>${title}</h3><p>${description}</p><span class="home-card-cta">${cta}${icon('arrow')}</span></a>`).join('');
+}
+function renderHome() {
+  const next = (learning?.path || []).find(item => !item.completed);
+  const topics = learning?.grammarTopics || [], done = topics.filter(item => item.completed).length;
+  const percent = topics.length ? Math.round(done / topics.length * 100) : 0;
+  const vocabulary = learning?.vocabulary?.length || 0, recordings = isSpanish() ? state.attempts.length : 0, mediaDone = (learning?.media || []).filter(item => item.completed).length;
+  return `<div class="hub-page home-page">${hubHeading('What would you like to practice?',`${esc(targetLang().name)} · Pick one area and give it your full attention.`,'WELCOME BACK')}<div class="feature-grid hub-grid" data-count="6">${hubLink('my-path','My Path',next ? `Up next: ${esc(next.title)}` : 'Follow your guided course.','signpost',`${percent}% complete`)}${hubLink('personalization','Personalization','Shape the examples, topics, and voices you meet.','sun','3 preference areas')}${hubLink('vocabulary','Vocabulary','Build recall from the words you save.','cards',`${vocabulary} saved ${vocabulary === 1 ? 'word' : 'words'}`)}${hubLink('grammar','Grammar','Explore principles and complete focused practice.','library',`${done}/${topics.length} practiced`)}${hubLink('pronunciation','Pronunciation','Train your ear, rhythm, and speaking confidence.','wave',`${recordings} ${recordings === 1 ? 'recording' : 'recordings'}`)}${hubLink('media','Media','Read, listen, and respond to meaningful material.','headphones',`${mediaDone} completed`)}</div></div>`;
+}
+function renderPersonalization() {
+  return `<div class="personalization-page hub-page">${hubHeading('Make it yours.','Shape your learning around how you practice, what interests you, and the voices you want to hear.','PERSONALIZATION')}<section class="home-personalization personalization-page-content" aria-labelledby="personalization-title"><div class="home-personalization-grid hub-grid" data-count="3">${renderPersonalizationCards()}</div></section></div>`;
+}
+function renderMyPath() {
+  const steps = learning?.path || [];
+  const currentStep = steps.findIndex(item => !item.completed);
+  const grammarDone = (learning?.grammarTopics || []).filter(item => item.completed).length, grammarTotal = learning?.grammarTopics?.length || 0, mediaDone = (learning?.media || []).filter(item => item.completed).length, mediaTotal = learning?.media?.length || 0;
+  const pathSteps = `<section class="card path-course-map">${steps.length ? steps.map((item,index) => `<article class="path-step ${item.completed ? 'completed' : index === currentStep ? 'current' : ''}"><span class="step-number">${String(index + 1).padStart(2,'0')}</span><div><p class="eyebrow">${esc(item.level || 'COURSE')}</p><h3>${esc(item.title)}</h3><p>${esc(item.description)}</p><p class="phrase-meta">${Number(item.progress?.completed || 0)} of ${Number(item.progress?.total || item.topicIds?.length || 0)} topics complete</p></div><a class="button small" href="#grammar">Explore</a></article>`).join('') : empty('Your course map is getting ready.','Explore the resource areas while the curriculum loads.')}</section>`;
+  const balance = `<aside class="card skill-balance path-balance-detail"><h2>Your skill balance</h2><p>Only activity you complete or save appears here.</p><div><span>Vocabulary</span><span>Saved words</span><small>${learning?.vocabulary?.length || 0}</small></div><div><span>Grammar</span><progress max="${Math.max(1,grammarTotal)}" value="${grammarDone}"></progress><small>${grammarDone}/${grammarTotal}</small></div><div><span>Pronunciation</span><span>Recordings</span><small>${isSpanish() ? state.attempts.length : 0}</small></div><div><span>Media</span><progress max="${Math.max(1,mediaTotal)}" value="${mediaDone}"></progress><small>${mediaDone}/${mediaTotal}</small></div></aside>`;
+  if(ui.resourceView === 'course') return `${back('My Path')}${pathSteps}`;
+  if(ui.resourceView === 'balance') return `${back('My Path')}${balance}`;
+  const next = steps.find(item => !item.completed);
+  return `<div class="hub-page my-path-hub">${hubHeading('Build the whole language.','Choose the part of your path you want to explore.','MY PATH')}<div class="feature-grid hub-grid" data-count="3">${feature('resource-view','Course map',next ? `Continue with ${esc(next.title)}.` : 'Review your guided sequence.','signpost','data-view="course"')}${feature('resource-view','Skill balance','See how your completed work is distributed.','chart','data-view="balance"')}${hubLink('grammar','Grammar curriculum','Open every principle and its focused practice.','library',`${grammarDone}/${grammarTotal} practiced`)}</div></div>`;
+}
+function renderDictionaryResult() {
+  const result = ui.dictionaryResult; if(!result) return '<p class="muted">Look up a word or short phrase to see a saved meaning or request a translation.</p>';
+  if(result.status === 'unavailable') return `<div class="inline-note neutral">${icon('info')}<span>${esc(result.message || 'Translation lookup is available when the extension is running in Chrome.')}</span></div>`;
+  const translation = result.translation || result.meaning || result.definition, source = languageByCode(result.sourceLang || targetLang().code), destination = languageByCode(result.targetLang || nativeLang().code);
+  return `<div><p class="eyebrow">${esc(source.name)} → ${esc(destination.name)}</p><h2 dir="${source.rtl ? 'rtl' : 'ltr'}">${esc(result.term || '')}</h2><p class="flashcard-meaning" dir="${destination.rtl ? 'rtl' : 'ltr'}">${esc(translation || 'No saved meaning yet.')}</p>${result.source === 'saved' ? '<span class="badge">Saved vocabulary</span>' : '<span class="badge outline">Translation result</span>'}</div>`;
+}
+function renderVocabularyPractice() {
+  const words = learning?.vocabulary || [], item = words.find(word => word.id === ui.reviewId) || words.find(word => word.meaning) || words[0];
+  if(ui.vocabPractice === 'list') return '';
+  if(!item) return `<section class="card practice-panel">${empty('Save a word to begin.','Words captured with the extension will appear here for practice.')}</section>`;
+  const listening = ui.vocabPractice === 'listening';
+  return `<section class="card practice-panel"><div class="section-head"><div><p class="eyebrow">${listening ? 'LISTENING PRACTICE' : 'MEANING PRACTICE'}</p><h2>${listening && !ui.revealed ? 'Listen, then recall.' : esc(item.word)}</h2></div><button class="icon-button" data-action="close-vocab-practice" aria-label="Close practice">${icon('close')}</button></div><div class="flashcard"><div>${listening ? btn('speak-learning-word','Hear the word','headphones','soft',`data-id="${esc(item.id)}"`) : btn('speak-learning-word','Listen','play','small',`data-id="${esc(item.id)}"`)}${ui.revealed ? `<h2 class="flashcard-word" dir="${targetLang().rtl ? 'rtl' : 'ltr'}">${esc(item.word)}</h2><p class="flashcard-meaning">${esc(item.meaning || 'No meaning saved yet.')}</p>` : `<p class="flashcard-context">Bring the meaning to mind, then reveal it.</p>${btn('reveal-learning-word','Reveal meaning',null,'primary')}`}</div></div>${ui.revealed ? `<div class="review-ratings">${[['again','Again'],['hard','Hard'],['good','Good'],['easy','Easy']].map(([rating,label]) => `<button data-action="rate-learning-word" data-id="${esc(item.id)}" data-rating="${rating}">${label}<small>Next word</small></button>`).join('')}</div>` : ''}</section>`;
+}
+function renderVocabulary() {
+  if(ui.resourceView === 'practice') return back('Vocabulary') + renderVocabularyPractice();
+  if(ui.resourceView === 'words') return back('Vocabulary') + renderVocabularyDetail();
+  if(ui.resourceView === 'lists') return back('Vocabulary') + renderVocabularyLists();
+  if(ui.resourceView === 'dictionary') return back('Vocabulary') + renderDictionary();
+  return `<div class="hub-page vocabulary-home">${hubHeading('Choose a vocabulary tool.','Look something up, organize saved words, or start a focused recall session.','VOCABULARY')}<div class="feature-grid hub-grid" data-count="5">${feature('resource-view','Dictionary',`Search ${esc(nativeLang().name)} and ${esc(targetLang().name)}.`,`search`,'data-view="dictionary"')}${feature('resource-view','All My Words',`${learning.vocabulary.length} saved words in one place.`,'library','data-view="words"')}${feature('resource-view','My Vocab Lists','Browse your Learning and Known lists.','cards','data-view="lists"')}${feature('vocab-practice','Meaning Cards','Recall a word, then check its meaning.','cards','data-mode="meaning"')}${feature('vocab-practice','Listening Cards','Hear a word and practice recognition.','headphones','data-mode="listening"')}</div></div>`;
+}
+function renderDictionary() { return `<section class="card dictionary-card"><div class="dictionary-heading"><div><p class="eyebrow">BILINGUAL DICTIONARY</p><h2>${esc(nativeLang().name)} ↔ ${esc(targetLang().name)}</h2><p>Enter either language. The dictionary recognizes the direction automatically.</p></div></div><form id="dictionary-form" class="dictionary-form"><label class="sr-only" for="dictionary-term">Word or short phrase in ${esc(nativeLang().name)} or ${esc(targetLang().name)}</label><input id="dictionary-term" name="term" required maxlength="200" placeholder="Search in ${esc(nativeLang().name)} or ${esc(targetLang().name)}…"><button class="button primary" type="submit">${icon('search')}Look up</button></form><div id="dictionary-result" class="dictionary-result" role="status">${renderDictionaryResult()}</div></section>`; }
+function renderWordRows(words,emptyTitle,emptyText) {
+  return `<div class="card vocab-list">${words.length ? words.map(item => `<div class="phrase-row"><div class="phrase-details"><p class="phrase-title" dir="${targetLang().rtl ? 'rtl' : 'ltr'}">${esc(item.word)}</p><p class="phrase-translation">${esc(item.meaning || 'Save a meaning from a webpage to make this ready for recall practice.')}</p><div class="phrase-meta">${Number(item.definitionCount || item.definitions?.length || 0)} saved ${Number(item.definitionCount || item.definitions?.length || 0) === 1 ? 'definition' : 'definitions'}</div></div>${btn('speak-learning-word','Listen','play','small',`data-id="${esc(item.id)}"`)}</div>`).join('') : empty(emptyTitle,emptyText)}</div>`;
+}
+function renderVocabularyDetail() {
+  const words = learning?.vocabulary || [];
+  return `<div class="vocab-resource-grid" aria-label="All My Words"><section>${renderWordRows(words,'Your vocabulary is ready for its first word.','Use the extension on a webpage to save one.')}</section></div>`;
+}
+function renderVocabularyLists() {
+  const words = learning?.vocabulary || [], learningWords = words.filter(item => item.status === 'learning'), knownWords = words.filter(item => item.status === 'known');
+  return `<section class="vocab-lists-view" aria-label="My Vocab Lists"><div class="vocab-list-collections"><section><div class="section-head"><div><h3>Learning</h3><p>${learningWords.length} ${learningWords.length === 1 ? 'word' : 'words'}</p></div></div>${renderWordRows(learningWords,'No learning words yet.','Words you mark as Learning will appear here.')}</section><section><div class="section-head"><div><h3>Known</h3><p>${knownWords.length} ${knownWords.length === 1 ? 'word' : 'words'}</p></div></div>${renderWordRows(knownWords,'No known words yet.','Words you mark as Known will appear here.')}</section></div></section>`;
+}
+function renderGrammar() {
+  const topics = learning?.grammarTopics || [], selected = topics.find(item => item.id === ui.grammarTopic);
+  if(selected) return `${btn('close-grammar-practice','← Back to grammar principles',null)}<section class="card practice-panel" id="grammar-practice"><div class="section-head"><div><p class="eyebrow">${esc(selected.level)} PRACTICE</p><h2>${esc(selected.title)}</h2></div><button class="icon-button" data-action="close-grammar-practice" aria-label="Close grammar practice">${icon('close')}</button></div><p>${esc(selected.practice?.instruction || 'Use examples from a trusted source, then make the pattern your own.')}</p><ol>${(selected.practice?.steps || ['Notice the pattern in two examples.','Transform one example.','Create a sentence of your own.']).map(step => `<li>${esc(step)}</li>`).join('')}</ol><div class="field"><label for="grammar-practice-response">Your practice notes</label><textarea id="grammar-practice-response" maxlength="2000" placeholder="Write examples, transformations, or questions here…"></textarea><small>Notes in this draft are not saved yet.</small></div>${btn('complete-grammar','Mark practice complete','check','primary',`data-id="${esc(selected.id)}"`)}</section>`;
+  const groups = [
+    ['Beginner',['A1','A2']],
+    ['Intermediate',['B1','B2']],
+    ['Advanced',['C1']]
+  ];
+  return groups.map(([label,levels]) => {
+    const items = topics.filter(item => levels.includes(item.level));
+    return `<section class="level-section"><div class="level-heading"><h2>${label}</h2><span class="badge">${items.filter(item => item.completed).length}/${items.length} practiced</span></div><div class="topic-grid">${items.map(item => `<button type="button" class="card topic-card topic-choice" data-action="open-grammar-practice" data-id="${esc(item.id)}"><span class="badge ${item.completed ? 'violet' : 'outline'}">${item.completed ? 'Practiced' : esc(item.level)}</span><h3>${esc(item.title)}</h3><p>${esc(item.description)}</p><span class="feature-arrow">${icon('arrow')}</span></button>`).join('')}</div></section>`;
+  }).join('');
+}
+function renderPronunciationOverview() {
+  if(!isSpanish()) return `<div class="feature-grid hub-grid" data-count="2">${feature('open-listening','Listen and respond',`Practice with your saved ${esc(targetLang().name)} material.`,'headphones')}${hubLink('media','Your media','Open saved reading and listening material.','cards')}</div>`;
+  return `<div class="feature-grid hub-grid" data-count="2">${feature('pronunciation-tab','Shadowing','Listen, imitate, and compare your recording.','mic','data-tab="practice" data-pronunciation-view="studio"')}${feature('pronunciation-tab','Phrase library','Choose a phrase or add a reference clip.','library','data-tab="library" data-pronunciation-view="library"')}</div>`;
+}
+function renderPronunciation() {
+  if(!isSpanish() || ui.pronunciationTab === 'overview') return `<div class="hub-page pronunciation-hub">${hubHeading('Find your voice.','Choose a focused way to listen, imitate, and speak with more confidence.','PRONUNCIATION')}${renderPronunciationOverview()}</div>`;
+  return back('Pronunciation') + (ui.pronunciationTab === 'practice' ? renderPractice() : renderLibrary());
+}
+function renderMediaInteraction(item) {
+  if(ui.mediaResponse !== item.id) return '';
+  const savedWriting = item.responses?.writing?.text || '', savedSpeaking = item.responses?.speaking?.text || '';
+  return `<div class="interaction-panel"><div class="section-head"><h3>Respond to this item</h3><button class="icon-button" data-action="close-media-response" aria-label="Close response panel">${icon('close')}</button></div><form id="media-response-form"><input type="hidden" id="media-item-id" value="${esc(item.id)}"><div class="field"><label for="media-writing-response">Writing response</label><textarea id="media-writing-response" maxlength="4000" dir="${targetLang().rtl ? 'rtl' : 'ltr'}" placeholder="Summarize it, answer it, or use one idea in your own sentence…">${esc(savedWriting)}</textarea></div><div class="inline-note neutral">${icon('mic')}<span><strong>Speak aloud:</strong> summarize the item without reading, then say one personal response. Use the button to hear the source again before you begin.</span></div><div class="flex-row">${item.audioUrl ? btn('play-media-audio','Hear source again','play','small',`data-id="${esc(item.id)}"`) : btn('speak-media','Hear source again','headphones','small',`data-id="${esc(item.id)}"`)}</div><div class="field"><label for="media-speaking-response">Reflection after speaking aloud</label><textarea id="media-speaking-response" maxlength="4000" placeholder="What did you say comfortably? Which words or structures need another try?">${esc(savedSpeaking)}</textarea><small>This stores your speaking reflection. Audio recording for media responses is planned for a later version.</small></div><button class="button primary" type="submit">Save responses</button></form></div>`;
+}
+function renderMediaCards(items, allowResponse = true) {
+  if(!items.length) return `<div class="card">${empty('Nothing here yet.','New material will appear here as it becomes available.')}</div>`;
+  return `<div class="media-grid">${items.map(item => {
+    const canRespond = allowResponse && item.experience !== 'carefree';
+    return `<article class="card media-card"><div class="card-top"><span class="media-kind">${item.kind === 'listening' ? icon('headphones') : icon('library')}${esc(item.kind || 'reading')}</span><span class="badge ${item.completed ? 'violet' : 'outline'}">${item.completed ? 'Completed' : item.origin === 'provided' ? 'Provided' : 'Saved'}</span></div><h2 dir="${targetLang().rtl ? 'rtl' : 'ltr'}">${esc(item.text)}</h2><p>${esc(item.translation || 'No translation saved.')}</p><div class="phrase-meta">${esc(sourceLabel(item.source))}${safeLink(item.sourceUrl) ? ` · <a href="${esc(safeLink(item.sourceUrl))}" target="_blank" rel="noopener">Open source</a>` : ''}</div><div class="flex-row">${item.audioUrl ? btn('play-media-audio','Listen','play','small',`data-id="${esc(item.id)}"`) : btn('speak-media',item.kind === 'listening' ? 'Listen' : 'Read aloud','headphones','small',`data-id="${esc(item.id)}"`)}${canRespond ? btn('open-media','Write or speak','edit','small',`data-id="${esc(item.id)}"`) : ''}${!item.completed ? btn('complete-media','Mark complete','check','small',`data-id="${esc(item.id)}"`) : ''}</div>${canRespond ? renderMediaInteraction(item) : ''}</article>`;
+  }).join('')}</div>`;
+}
+function renderMedia() {
+  const media = learning?.media || [];
+  if(ui.resourceView === 'home') return `<div class="hub-page media-hub">${hubHeading('Learn through meaningful media.','Choose a mode, then explore material at your own pace.','MEDIA')}<div class="feature-grid hub-grid" data-count="3">${feature('resource-view','Read','Provided reading practice.','library','data-view="reading"')}${feature('resource-view','Listen','Provided listening practice.','headphones','data-view="listening"')}${feature('resource-view','Your Media','Everything you saved from the browser extension.','cards','data-view="saved"')}</div></div>`;
+  let items = ui.resourceView === 'saved' ? media.filter(item => item.origin === 'saved') : media.filter(item => item.origin === 'provided' && item.kind === ui.resourceView);
+  if(ui.mediaResponse) items = items.filter(item => item.id === ui.mediaResponse);
+  if(ui.mediaResponse) return `${btn('close-media-response','← Back to media',null)}${renderMediaCards(items,true)}`;
+  if(ui.resourceView === 'saved') return `${back('Media')}<section class="media-library-groups">${renderMediaCards(items,true)}</section>`;
+  const interactive = items.filter(item => item.experience === 'interactive'), carefree = items.filter(item => item.experience !== 'interactive');
+  return `${back('Media')}<section class="media-library-groups"><div class="media-section"><div class="section-head"><h2>Interactive ${ui.resourceView === 'listening' ? 'listening' : 'reading'}</h2><span class="badge">Response included</span></div>${renderMediaCards(interactive,true)}</div><div class="media-section"><div class="section-head"><h2>Care-free ${ui.resourceView === 'listening' ? 'listening' : 'reading'}</h2><span class="badge">Enjoy at your pace</span></div>${renderMediaCards(carefree,false)}</div></section>`;
 }
 function renderStats() {
   const s = D.stats(state), m = Number(s.practiceMinutes || 0);
@@ -91,11 +240,11 @@ function renderToday() {
   return `${heading('A little closer to fluent.','Make the Spanish you discover part of the Spanish you speak.',btn('new-phrase','Add a phrase','plus'),date)}
   <section class="card hero"><div class="hero-copy"><span class="badge violet">${icon('headphones')} YOUR DAILY PRACTICE</span><h2>Listen closely.<br>Find your own voice.</h2><p>Pick a phrase. Follow its rhythm. Record yourself, listen back, and make it yours.</p>${btn(next ? 'start-phrase' : 'new-phrase',next ? 'Start shadowing' : 'Add your first phrase','arrow','primary',next ? `data-id="${esc(next.id)}"` : '')}</div><div class="hero-visual"><div class="sound-illustration" aria-hidden="true">${bars}</div><p class="quote" lang="es">${esc(next?.text || 'Poco a poco, cada día.')}</p><span class="quote-source">${esc(next ? sourceLabel(next.source) : 'A LITTLE, EVERY DAY')}</span></div></section>${renderStats()}
   <div class="two-column"><section><div class="section-head"><div><h2>Your next phrases</h2><p>${due.length ? `${due.length} ready to practice at your own pace` : 'Choose something you want to say'}</p></div><a class="text-button" href="#library">View library ${icon('arrow')}</a></div><div class="card phrase-list">${state.phrases.length ? (due.length ? due : state.phrases).slice(0,4).map((item,i) => `<div class="phrase-row"><span class="phrase-number">${String(i+1).padStart(2,'0')}</span><div class="phrase-details"><p class="phrase-title" lang="es">${esc(item.text)}</p><p class="phrase-translation">${esc(item.translation || 'Add a meaning in your library')}</p><div class="phrase-meta">${esc(sourceLabel(item.source))}<span>·</span>${item.references.length ? 'Reference audio ready' : 'Add a reference voice'}</div></div><button class="round-play" data-action="start-phrase" data-id="${esc(item.id)}" aria-label="Practice ${esc(item.text)}">${icon('arrow')}</button></div>`).join('') : empty('Your next phrase is out there.','Save a phrase from the web, or add one of your own.',btn('new-phrase','Add a phrase','plus','small'))}</div></section>
-  <aside><div class="section-head"><h2>Your listening direction</h2></div><div class="card accent-card"><div class="accent-art"><span class="accent-code">${esc(a.id)}</span><span class="small-wave">${icon('wave')}</span></div><h3>${esc(a.label)}</h3><p>${esc(a.description || 'Explore regional Spanish with your own reference voices.')}</p><a class="text-button" href="#voices">Explore voices & accents ${icon('arrow')}</a></div><div class="inline-note neutral">${icon('cards')}<span>Know the word. Learn to say it.<br>Vocabulary and speaking reviews progress separately.</span></div></aside></div>`;
+  <aside><div class="section-head"><h2>Your listening direction</h2></div><div class="card accent-card"><div class="accent-art"><span class="accent-code">${esc(a.id)}</span><span class="small-wave">${icon('wave')}</span></div><h3>${esc(a.label)}</h3><p>${esc(a.description || 'Explore regional Spanish with your own reference voices.')}</p>${btn('open-settings','Language settings','settings','small')}</div><div class="inline-note neutral">${icon('cards')}<span>Know the word. Learn to say it.<br>Vocabulary and speaking reviews progress separately.</span></div></aside></div>`;
 }
 function filteredPhrases() { const q = ui.search.trim().toLocaleLowerCase(); return state.phrases.filter(item => (ui.source === 'all' || item.source === ui.source) && (!q || `${item.text} ${item.translation || ''}`.toLocaleLowerCase().includes(q))); }
 function renderLibrary() {
-  return `${heading('Words worth saying.','Everything you save, ready to become something you can say.',btn('new-phrase','Add a phrase','plus','primary'),'YOUR LIBRARY')}<div class="toolbar"><div class="search-wrap">${icon('search')}<label class="sr-only" for="library-search">Search phrases and meanings</label><input id="library-search" type="search" placeholder="Search your phrases…" value="${esc(ui.search)}"></div><label class="sr-only" for="library-source">Filter by source</label><select id="library-source" class="filter-select">${[['all','All sources'],['web','Web pages'],['video','Videos'],['manual','Your phrases'],['starter','Starter phrases']].map(([v,l]) => option(v,l,ui.source)).join('')}</select><a class="button" href="manager.html" target="_blank" rel="noopener">Vocabulary manager ${icon('external')}</a></div><div class="section-head"><p class="muted"><span id="filtered-count">${filteredPhrases().length}</span> phrases · ${state.vocabulary.length} saved vocabulary words</p></div><div id="library-results">${renderLibraryItems()}</div>${note('Save words and phrases from websites with the extension. Your Spanish captures appear here automatically; full word editing remains in the vocabulary manager.','neutral')}`;
+  return `<div class="toolbar"><div class="search-wrap">${icon('search')}<label class="sr-only" for="library-search">Search phrases and meanings</label><input id="library-search" type="search" placeholder="Search your phrases…" value="${esc(ui.search)}"></div><label class="sr-only" for="library-source">Filter by source</label><select id="library-source" class="filter-select">${[['all','All sources'],['web','Web pages'],['video','Videos'],['manual','Your phrases'],['starter','Starter phrases']].map(([v,l]) => option(v,l,ui.source)).join('')}</select>${btn('new-phrase','Add a phrase','plus','primary')}</div><div class="section-head"><p class="muted"><span id="filtered-count">${filteredPhrases().length}</span> phrases · ${state.vocabulary.length} saved vocabulary words</p></div><div id="library-results">${renderLibraryItems()}</div>${note('Save words and phrases from websites with the extension. Your Spanish captures appear here automatically.','neutral')}`;
 }
 function renderLibraryItems() {
   const items = filteredPhrases();
@@ -104,8 +253,8 @@ function renderLibraryItems() {
 function renderPractice() {
   if(!p.phraseId) initPhrase();
   const item = phrase(), ref = reference(), attempt = latest(), hidden = hiddenReference(), disabled = busy() ? ' disabled' : '';
-  if(!item) return `${heading('Make it sound like you.','A short phrase, a native reference, and room to try again.','','THE PRACTICE STUDIO')}<div class="card">${empty('Choose your first phrase.','Add a Spanish phrase to start listening and recording.',btn('new-phrase','Add a phrase','plus','primary'))}</div>`;
-  return `${heading('Make it sound like you.','Listen for the rhythm. Try it out. Listen to yourself.',`<span class="badge outline">${icon('mic')} ${attempts(item.id).length} attempts</span>`,'THE PRACTICE STUDIO')}<div class="toolbar"><label class="sr-only" for="practice-phrase">Choose a phrase</label><select id="practice-phrase"${disabled}>${state.phrases.map(item => option(item.id,item.text,p.phraseId)).join('')}</select></div>
+  if(!item) return `<div class="card">${empty('Choose your first phrase.','Add a Spanish phrase to start listening and recording.',btn('new-phrase','Add a phrase','plus','primary'))}</div>`;
+  return `<div class="toolbar"><label class="sr-only" for="practice-phrase">Choose a phrase</label><select id="practice-phrase"${disabled}>${state.phrases.map(item => option(item.id,item.text,p.phraseId)).join('')}</select><span class="badge outline">${icon('mic')} ${attempts(item.id).length} attempts</span></div>
   <div class="practice-layout"><div class="practice-main"><section class="card practice-card" aria-label="Shadowing player"><div class="practice-toolbar"><div class="segmented" aria-label="Session mode">${[['practice','Guided practice'],['test','Test yourself']].map(([v,l]) => `<button data-action="mode" data-mode="${v}" aria-pressed="${p.mode === v}" class="${p.mode === v ? 'active' : ''}"${disabled}>${l}</button>`).join('')}</div><span class="practice-source">${icon('globe')}${esc(sourceLabel(item.source))}</span></div>
   <div class="practice-copy"><h2 class="practice-text" lang="es">${esc(p.text)}</h2>${p.translation ? `<p class="practice-translation">${esc(item.translation || 'No translation yet. Add one in your library.')}</p>` : ''}<button class="translation-toggle" data-action="toggle-translation"${disabled}>${p.translation ? 'Hide' : 'Show'} meaning</button></div>
   ${hidden ? `<div class="practice-empty-test">${icon('lock')}Read this phrase aloud before hearing the reference.<br>Your reference unlocks after you save an attempt.</div>` : `<div class="player"><div class="player-top"><span class="player-label">${icon('headphones')}${ref ? esc(ref.label) : 'Browser speech · accent may differ'}</span><span class="playback-time" id="playback-time">${clipTime(0)} / ${clipTime(p.duration)}</span></div><div class="player-main"><button class="player-button" data-action="play-reference" aria-label="Play reference"${disabled}>${icon('play')}</button><div class="player-track"><label class="sr-only" for="playback-seek">Playback position</label><input id="playback-seek" type="range" min="0" max="${p.duration || 1}" step="0.05" value="0"${!ref || busy() ? ' disabled' : ''}><p>${ref ? 'Listen once, then speak along with the reference.' : 'Add native audio for regional shadowing.'}</p></div></div><div class="player-tools"><button class="loop-button ${p.loop ? 'active' : ''}" data-action="toggle-loop" aria-pressed="${p.loop}"${!ref || busy() ? ' disabled' : ''}>${icon('loop')}Loop segment</button><div class="flex-row"><label for="playback-speed" class="sr-only">Playback speed</label><select id="playback-speed" class="compact-select"${disabled}>${[.6,.75,.9,1,1.1].map(n => option(n,`${n}× speed`,p.speed)).join('')}</select>${btn('stop-audio','Stop','stop','small',disabled)}</div></div></div>
@@ -113,7 +262,7 @@ function renderPractice() {
   <div class="record-zone"><span id="record-timer" class="record-timer"${p.recording ? '' : ' hidden'}>0:00 / 0:30</span><div id="level-meter" class="level-meter"${p.recording ? '' : ' hidden'} aria-hidden="true"><span></span></div><button id="record-button" class="button ${p.recording ? 'recording-button' : 'primary'}" data-action="record"${p.saving || p.starting || p.generating ? ' disabled' : ''}>${icon(p.recording ? 'stop' : 'mic')}${p.recording ? 'Finish recording' : p.starting ? 'Opening microphone…' : p.saving ? 'Saving your attempt…' : 'Record an attempt'}</button><p class="record-help" id="record-help">${p.recording ? 'Reference muted. Speak naturally, then finish your recording.' : 'The reference pauses while you record. Up to 30 seconds; saved on this device.'}</p></div></section>
   ${attempt && !hidden ? renderComparison(attempt) : ''}
   ${attempts(item.id).length ? `<section class="card comparison"><div class="section-head"><h2>Previous attempts</h2><span class="badge">${attempts(item.id).length} saved</span></div><div class="history-list">${attempts(item.id).slice(0,8).map(attempt => `<div class="history-row"><button class="round-play" data-action="play-attempt" data-id="${esc(attempt.id)}" aria-label="Play recording from ${esc(when(attempt.createdAt))}"${busy() || hidden ? ' disabled' : ''}>${icon('play')}</button><div class="phrase-details">${esc(when(attempt.createdAt))} · ${esc(clock(attempt.createdAt))}<br><small>${sec(attempt.duration)} · ${attempt.mode === 'test' ? 'Test' : 'Practice'} · ${esc(accent(attempt.accentId).shortLabel)}</small></div>${btn('select-attempt','Compare',null,'small',`data-id="${esc(attempt.id)}"${busy() || hidden ? ' disabled' : ''}`)}<button class="icon-button" data-action="delete-attempt" data-id="${esc(attempt.id)}" aria-label="Delete this recording"${disabled}>${icon('trash')}</button></div>`).join('')}</div></section>` : ''}
-  </div><aside class="practice-aside"><section class="card"><p class="eyebrow">YOUR REFERENCE</p><div class="field"><label for="practice-reference">Recording</label><select id="practice-reference"${busy() || hidden ? ' disabled' : ''}><option value="">Browser speech (fallback)</option>${item.references.map(r => option(r.id,`${r.label}${r.accentId ? ` · ${accent(r.accentId).shortLabel}` : ''}`,p.referenceId)).join('')}</select></div><p class="reference-help">${ref ? `${ref.kind === 'voicebox' ? 'Generated reference' : 'Original audio'}${ref.accentId ? ` · ${esc(accent(ref.accentId).label)}` : ''}. Each attempt keeps its own reference.` : 'Browser speech is a listening aid. A native clip or checked Voicebox reference is best for accent practice.'}</p><hr class="divider"><div class="field"><label for="generate-voice">Generate a new reference</label><select id="generate-voice"${busy() || !state.voices.length || hidden ? ' disabled' : ''}>${state.voices.map(voice => option(voice.id,`${voice.name} · ${accent(voice.accentId).shortLabel}`,state.voices.find(v => v.accentId === state.settings.accentId)?.id)).join('') || '<option>Add a voice first</option>'}</select></div>${btn('generate-reference',p.generating ? 'Generating…' : 'Generate audio','wave','soft full-width',`id="generate-button"${busy() || !state.voices.length || hidden ? ' disabled' : ''}`)}${p.generating ? btn('cancel-generation','Cancel generation',null,'small full-width row-gap') : ''}<p class="reference-help">Creates the full saved phrase in Spanish with your selected Voicebox profile.</p><div class="flex-row">${btn('upload-reference','Upload audio','upload','small',busy() || hidden ? 'disabled' : '')}<a class="text-button" href="#voices">Manage voices</a></div></section><section class="card"><p class="eyebrow">A SMALL, USEFUL ROUTINE</p>${[['Listen closely','Notice the pauses and the words that carry the rhythm.'],['Shadow the phrase','Play the reference and speak along. Loop any part you want to repeat.'],['Find one improvement','Record with the reference muted. Compare, choose one change, and retry.']].map(([title,body],i) => `<div class="step ${i === 0 ? 'active' : ''}"><span class="step-number">${i+1}</span><div><h3>${title}</h3><p>${body}</p></div></div>`).join('')}</section></aside></div>`;
+  </div><aside class="practice-aside"><section class="card"><p class="eyebrow">YOUR REFERENCE</p><div class="field"><label for="practice-reference">Recording</label><select id="practice-reference"${busy() || hidden ? ' disabled' : ''}><option value="">Browser speech (fallback)</option>${item.references.map(r => option(r.id,`${r.label}${r.accentId ? ` · ${accent(r.accentId).shortLabel}` : ''}`,p.referenceId)).join('')}</select></div><p class="reference-help">${ref ? `${ref.kind === 'voicebox' ? 'Generated reference' : 'Original audio'}${ref.accentId ? ` · ${esc(accent(ref.accentId).label)}` : ''}. Each attempt keeps its own reference.` : 'Browser speech is a listening aid. Add and manage regional voices under Spanish in Settings.'}</p><hr class="divider"><div class="field"><label for="generate-voice">Generate a new reference</label><select id="generate-voice"${busy() || !state.voices.length || hidden ? ' disabled' : ''}>${state.voices.map(voice => option(voice.id,`${voice.name} · ${accent(voice.accentId).shortLabel}`,state.voices.find(v => v.accentId === state.settings.accentId)?.id)).join('') || '<option>Add a voice in Settings</option>'}</select></div>${btn('generate-reference',p.generating ? 'Generating…' : 'Generate audio','wave','soft full-width',`id="generate-button"${busy() || !state.voices.length || hidden ? ' disabled' : ''}`)}${p.generating ? btn('cancel-generation','Cancel generation',null,'small full-width row-gap') : ''}<p class="reference-help">Creates the full saved phrase in Spanish with your selected Voicebox profile.</p>${btn('upload-reference','Upload audio','upload','small',busy() || hidden ? 'disabled' : '')}</section><section class="card"><p class="eyebrow">A SMALL, USEFUL ROUTINE</p>${[['Listen closely','Notice the pauses and the words that carry the rhythm.'],['Shadow the phrase','Play the reference and speak along. Loop any part you want to repeat.'],['Find one improvement','Record with the reference muted. Compare, choose one change, and retry.']].map(([title,body],i) => `<div class="step ${i === 0 ? 'active' : ''}"><span class="step-number">${i+1}</span><div><h3>${title}</h3><p>${body}</p></div></div>`).join('')}</section></aside></div>`;
 }
 function renderComparison(attempt) {
   const snap = attempt.referenceSnapshot, disabled = busy() ? ' disabled' : '';
@@ -129,10 +278,8 @@ function renderAssessment(result) {
   return `<div class="assessment"><h3>Pronunciation assessment <span class="badge">Azure · ${esc(result.locale)}</span></h3><div class="metrics">${metric('Accuracy',result.accuracy)}${metric('Fluency',result.fluency)}${metric('Completeness',result.completeness)}</div>${result.transcript ? `<p>Heard: <span lang="es">${esc(result.transcript)}</span></p>` : ''}<div class="word-feedback">${(result.words || []).map(word => `<span class="word-score ${Number.isFinite(word.accuracy) && word.accuracy < 70 ? 'concern' : ''}" title="${esc(word.errorType || 'Word accuracy')}">${esc(word.word)}<small>${Number.isFinite(word.accuracy) ? Math.round(word.accuracy) : '—'}</small></span>`).join('')}</div>${(result.tips || []).length ? `<ul>${result.tips.map(tip => `<li>${esc(tip)}</li>`).join('')}</ul>` : ''}${(result.limitations || []).map(text => `<p>${esc(text)}</p>`).join('')}<p>Provider estimates describe this attempt, not an accent score. Regional Spanish can vary.</p></div>`;
 }
 function renderVoices() {
-  return `${heading('Spanish has many voices.','Choose the speakers you want to learn from. Explore a region, or stay with one familiar reference.',btn('open-settings','Studio settings','settings'),'VOICES & ACCENTS')}
-  <section class="card card-pad"><div class="section-head"><div><h2>Connect your Voicebox</h2><p>Bring your own regional voice profiles into the studio.</p></div><span class="badge">Voicebox</span></div><form id="voice-connect-form" class="voice-connect"><div class="field"><label for="voicebox-url">Voicebox address</label><input id="voicebox-url" type="url" required value="${esc(ui.profilesUrl || state.settings.voiceboxUrl)}" placeholder="http://127.0.0.1:17493"><small>Keep Voicebox running. Your voice profiles stay in Voicebox; generated reference clips are saved here.</small></div><button type="submit" class="button primary"${busy() ? ' disabled' : ''}>${icon('headphones')}Load voice profiles</button></form>${ui.profiles.length ? `<div class="section-gap"><h3>Available profiles</h3>${ui.profiles.map((profile,i) => `<div class="profile-row" data-profile-index="${i}"><div class="profile-name"><strong>${esc(profile.name)}</strong><p class="reference-help">${esc(profile.id)}</p></div><div class="field"><label for="profile-name-${i}">Display name</label><input id="profile-name-${i}" maxlength="100" value="${esc(profile.name)}"></div><div class="field"><label for="profile-accent-${i}">Reference accent</label><select id="profile-accent-${i}">${accentOptions(state.settings.accentId)}</select></div>${btn('save-profile','Add voice','plus','small',`data-index="${i}"`)}</div>`).join('')}</div>` : ''}</section>
-  <section class="section-gap"><div class="section-head"><div><h2>Your reference voices</h2><p>Preview each voice before using it as a regional reference.</p></div><span class="badge">${state.voices.length} ${state.voices.length === 1 ? 'voice' : 'voices'}</span></div>${state.voices.length ? `<div class="voice-grid">${state.voices.map(voice => `<article class="card voice-card"><div class="card-top"><div class="voice-avatar" aria-hidden="true">${esc(voice.name.split(/\s+/).slice(0,2).map(w => w[0]).join(''))}</div><span class="badge violet">${esc(accent(voice.accentId).shortLabel)}</span></div><h3>${esc(voice.name)}</h3><p>${esc(voice.description || 'Your Voicebox reference. Listen for the regional sounds and delivery you want to practice.')}</p><div class="card-bottom">${btn('preview-voice','Preview voice','play','small',`data-id="${esc(voice.id)}"${busy() ? ' disabled' : ''}`)}<div class="card-actions"><button class="icon-button" data-action="edit-voice" data-id="${esc(voice.id)}" aria-label="Edit ${esc(voice.name)}"${busy() ? ' disabled' : ''}>${icon('edit')}</button><button class="icon-button" data-action="delete-voice" data-id="${esc(voice.id)}" aria-label="Remove ${esc(voice.name)}"${busy() ? ' disabled' : ''}>${icon('trash')}</button></div></div></article>`).join('')}</div>` : `<div class="card">${empty('A familiar voice makes a difference.','Load your Voicebox profiles above, then assign a regional accent. You can also upload native audio directly to any phrase.',btn('go-library','Open phrase library','arrow','small'))}</div>`}</section>
-  <section class="section-gap"><div class="section-head"><div><h2>Pick your listening direction</h2><p>Regional labels organize your references; they do not guarantee a generated accent.</p></div></div><div class="accent-grid">${D.ACCENTS.map(a => `<button class="accent-tile ${a.id === state.settings.accentId ? 'selected' : ''}" data-action="set-accent" data-id="${esc(a.id)}" aria-pressed="${a.id === state.settings.accentId}"${busy() ? ' disabled' : ''}><strong>${esc(a.label)}</strong><small>${esc(a.description)}</small></button>`).join('')}</div></section>${note('The goal is understandable speech and the patterns you choose to practice. Matching a speaker’s vocal identity or pitch is not the objective.','neutral')}`;
+  return `<section class="card card-pad"><div class="section-head"><div><h2>Connect your Voicebox</h2><p>Bring your own regional voice profiles into the studio.</p></div><span class="badge">Voicebox</span></div><form id="voice-connect-form" class="voice-connect"><div class="field"><label for="voicebox-url">Voicebox address</label><input id="voicebox-url" type="url" required value="${esc(ui.profilesUrl || state.settings.voiceboxUrl)}" placeholder="http://127.0.0.1:17493"><small>Keep Voicebox running. Your voice profiles stay in Voicebox; generated reference clips are saved here.</small></div><button type="submit" class="button primary"${busy() ? ' disabled' : ''}>${icon('headphones')}Load voice profiles</button></form>${ui.profiles.length ? `<div class="section-gap"><h3>Available profiles</h3>${ui.profiles.map((profile,i) => `<div class="profile-row" data-profile-index="${i}"><div class="profile-name"><strong>${esc(profile.name)}</strong><p class="reference-help">${esc(profile.id)}</p></div><div class="field"><label for="profile-name-${i}">Display name</label><input id="profile-name-${i}" maxlength="100" value="${esc(profile.name)}"></div><div class="field"><label for="profile-accent-${i}">Reference accent</label><select id="profile-accent-${i}">${accentOptions(state.settings.accentId)}</select></div>${btn('save-profile','Add voice','plus','small',`data-index="${i}"`)}</div>`).join('')}</div>` : ''}</section>
+  <section class="section-gap"><div class="section-head"><div><h2>Your reference voices</h2><p>Preview each voice before using it as a regional reference.</p></div><span class="badge">${state.voices.length} ${state.voices.length === 1 ? 'voice' : 'voices'}</span></div>${state.voices.length ? `<div class="voice-grid">${state.voices.map(voice => `<article class="card voice-card"><div class="card-top"><div class="voice-avatar" aria-hidden="true">${esc(voice.name.split(/\s+/).slice(0,2).map(w => w[0]).join(''))}</div><span class="badge violet">${esc(accent(voice.accentId).shortLabel)}</span></div><h3>${esc(voice.name)}</h3><p>${esc(voice.description || 'Your Voicebox reference. Listen for the regional sounds and delivery you want to practice.')}</p><div class="card-bottom">${btn('preview-voice','Preview voice','play','small',`data-id="${esc(voice.id)}"${busy() ? ' disabled' : ''}`)}<div class="card-actions"><button class="icon-button" data-action="edit-voice" data-id="${esc(voice.id)}" aria-label="Edit ${esc(voice.name)}"${busy() ? ' disabled' : ''}>${icon('edit')}</button><button class="icon-button" data-action="delete-voice" data-id="${esc(voice.id)}" aria-label="Remove ${esc(voice.name)}"${busy() ? ' disabled' : ''}>${icon('trash')}</button></div></div></article>`).join('')}</div>` : `<div class="card">${empty('A familiar voice makes a difference.','Load your Voicebox profiles above, then assign a regional accent. You can also upload native audio directly to any phrase.',btn('go-library','Open phrase library','arrow','small'))}</div>`}</section>${note('Choose your preferred Spanish region from Regions & Accents. Voicebox profiles can be assigned to accents here.','neutral')}`;
 }
 function dueWords() { return D.dueItems(state,'meaning').filter(item => !ui.reviewed.has(item.id)); }
 function reviewWord() { const items = dueWords(); return items.find(item => item.id === ui.reviewId) || items[0]; }
@@ -141,18 +288,32 @@ function renderReview() {
   if(!speaking) ui.reviewId = item?.id || null;
   const listening = ui.reviewKind === 'listening';
   return `${heading('Keep it within reach.','Remember the meaning. Recognize the sound. Practice saying it.','','YOUR REVIEW QUEUE')}<div class="review-wrap"><div class="review-status"><div class="segmented">${[['meaning','Vocabulary'],['listening','Listening'],['speaking','Speaking']].map(([id,label]) => `<button data-action="review-kind" data-kind="${id}" class="${id === ui.reviewKind ? 'active' : ''}" aria-pressed="${id === ui.reviewKind}">${label}</button>`).join('')}</div><p>${items.length} ready</p></div>
-  ${!item ? `<div class="card">${empty(ui.reviewed.size && !speaking ? 'A little more familiar.' : 'Your queue is clear.',speaking ? 'Add phrases to your library to start speaking reviews.' : state.vocabulary.length ? 'No words with saved meanings are due right now. Come back later or add a meaning in the vocabulary manager.' : 'Save Spanish words on a website to build your flashcards.',speaking ? btn('go-library','Open library','arrow','small') : '<a class="button small" href="manager.html" target="_blank" rel="noopener">Open vocabulary manager</a>')}</div>` : speaking ? `<div class="card flashcard"><span class="badge violet">SPOKEN RECALL</span><h2 class="flashcard-word" lang="es">${esc(item.text)}</h2><p class="flashcard-context">Say the phrase before listening to the reference. Your saved attempt and self-rating guide your next speaking review.</p>${btn('test-phrase','Test this phrase','mic','primary',`data-id="${esc(item.id)}"`)}</div>` : `<div class="card flashcard"><span class="badge violet">${listening ? 'LISTEN & RECALL' : 'SPANISH → MEANING'}</span>${listening && !ui.revealed ? `<h2 class="flashcard-word">Listen closely.</h2>${btn('speak-card','Hear the word','headphones','soft',`data-id="${esc(item.id)}"`)}<p class="reference-help">Browser speech · reference accent may differ</p>` : `<h2 class="flashcard-word" lang="es">${esc(item.word)}</h2>${btn('speak-card','Listen','play','small',`data-id="${esc(item.id)}"`)}`}${ui.revealed ? `<p class="flashcard-meaning">${esc(item.meaning)}</p>${item.context ? `<p class="flashcard-context" lang="es">${esc(item.context)}</p>` : ''}` : `<p class="flashcard-context">${listening ? 'Can you recognize the word and recall its meaning?' : 'Bring the meaning to mind before you turn the card.'}</p>${btn('reveal-card','Reveal meaning',null,'primary')}`}</div>${ui.revealed ? `<div class="review-ratings">${[['again','Again','Keep practicing'],['hard','Hard','A little more time'],['good','Good','Coming back later'],['easy','Easy','Give it more space']].map(([rating,label,help]) => `<button data-action="rate-card" data-id="${esc(item.id)}" data-rating="${rating}">${label}<small>${help}</small></button>`).join('')}</div>` : ''}`}
-  ${note(speaking ? 'Speaking practice has its own review schedule. Knowing a word’s meaning and saying it comfortably are different skills.' : 'Vocabulary and listening cards share your meaning review schedule. Words without a saved meaning remain in your vocabulary manager until they are ready to review.','neutral')}</div>`;
+  ${!item ? `<div class="card">${empty(ui.reviewed.size && !speaking ? 'A little more familiar.' : 'Your queue is clear.',speaking ? 'Add phrases to your library to start speaking reviews.' : state.vocabulary.length ? 'No words with saved meanings are due right now. Come back later or save another meaning from the web.' : 'Save Spanish words on a website to build your flashcards.',speaking ? btn('go-library','Open library','arrow','small') : '<a class="button small" href="#vocabulary">Open vocabulary</a>')}</div>` : speaking ? `<div class="card flashcard"><span class="badge violet">SPOKEN RECALL</span><h2 class="flashcard-word" lang="es">${esc(item.text)}</h2><p class="flashcard-context">Say the phrase before listening to the reference. Your saved attempt and self-rating guide your next speaking review.</p>${btn('test-phrase','Test this phrase','mic','primary',`data-id="${esc(item.id)}"`)}</div>` : `<div class="card flashcard"><span class="badge violet">${listening ? 'LISTEN & RECALL' : 'SPANISH → MEANING'}</span>${listening && !ui.revealed ? `<h2 class="flashcard-word">Listen closely.</h2>${btn('speak-card','Hear the word','headphones','soft',`data-id="${esc(item.id)}"`)}<p class="reference-help">Browser speech · reference accent may differ</p>` : `<h2 class="flashcard-word" lang="es">${esc(item.word)}</h2>${btn('speak-card','Listen','play','small',`data-id="${esc(item.id)}"`)}`}${ui.revealed ? `<p class="flashcard-meaning">${esc(item.meaning)}</p>${item.context ? `<p class="flashcard-context" lang="es">${esc(item.context)}</p>` : ''}` : `<p class="flashcard-context">${listening ? 'Can you recognize the word and recall its meaning?' : 'Bring the meaning to mind before you turn the card.'}</p>${btn('reveal-card','Reveal meaning',null,'primary')}`}</div>${ui.revealed ? `<div class="review-ratings">${[['again','Again','Keep practicing'],['hard','Hard','A little more time'],['good','Good','Coming back later'],['easy','Easy','Give it more space']].map(([rating,label,help]) => `<button data-action="rate-card" data-id="${esc(item.id)}" data-rating="${rating}">${label}<small>${help}</small></button>`).join('')}</div>` : ''}`}
+  ${note(speaking ? 'Speaking practice has its own review schedule. Knowing a word’s meaning and saying it comfortably are different skills.' : 'Vocabulary and listening cards share your meaning review schedule. Words need a saved meaning before they are ready to review.','neutral')}</div>`;
 }
-function renderProgress() {
-  const sorted = [...state.attempts].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-  const days = Array.from({length:14},(_,i) => { const day = new Date(); day.setHours(0,0,0,0); day.setDate(day.getDate() - 13 + i); const next = new Date(day); next.setDate(next.getDate()+1); return {day,count:sorted.filter(a => new Date(a.createdAt) >= day && new Date(a.createdAt) < next).length}; });
-  const maximum = Math.max(1,...days.map(d => d.count));
-  return `${heading('Hear how far you’ve come.','A record of your practice, with your own voice as the evidence.',btn('export-backup','Export backup','download'),'YOUR PROGRESS')}${renderStats()}<div class="two-column"><section class="card card-pad"><div class="section-head"><div><h2>Show up. Say something.</h2><p>Recordings over the last 14 days</p></div></div><div class="progress-activity" role="img" aria-label="${esc(days.map(d => `${when(d.day)}: ${d.count} recordings`).join('; '))}">${days.map(d => `<div class="day-column" title="${esc(when(d.day))}: ${d.count} recordings"><div class="day-bar ${d.count ? 'has-activity' : ''}" style="height:${d.count ? Math.max(8,65*d.count/maximum) : 3}px"></div><small>${d.day.getDate()}</small></div>`).join('')}</div></section><section class="card card-pad"><p class="eyebrow">PROGRESS YOU CAN HEAR</p><h2>Compare across days.</h2><p class="section-description row-gap">Revisit a phrase and switch between earlier and recent attempts. Listen for clearer words, more comfortable pacing, and fewer restarts.</p><a class="text-button" href="#practice">Back to the studio ${icon('arrow')}</a></section></div>
-  <section class="section-gap"><div class="section-head"><h2>Your recordings</h2><span class="badge">${sorted.length} saved locally</span></div><div class="card table-wrap">${sorted.length ? `<table class="progress-table"><thead><tr><th scope="col">Phrase</th><th scope="col">Recorded</th><th scope="col">Practice</th><th scope="col">Actions</th></tr></thead><tbody>${sorted.map(attempt => { const item = state.phrases.find(p => p.id === attempt.phraseId); return `<tr><td lang="es">${esc(attempt.text || attempt.referenceSnapshot?.text || item?.text || 'Saved phrase')}<small>${esc(accent(attempt.accentId).label)}</small></td><td>${esc(when(attempt.createdAt))}<small>${esc(clock(attempt.createdAt))}</small></td><td>${sec(attempt.duration)}<small>${attempt.mode === 'test' ? 'Test' : 'Guided'}${attempt.selfRating ? ` · ${esc(attempt.selfRating)}` : ''}</small></td><td><div class="flex-row"><button class="icon-button" data-action="play-attempt" data-id="${esc(attempt.id)}" aria-label="Play this recording">${icon('play')}</button><button class="icon-button" data-action="open-attempt" data-id="${esc(attempt.id)}" aria-label="Open recording comparison">${icon('arrow')}</button><button class="icon-button" data-action="delete-attempt" data-id="${esc(attempt.id)}" aria-label="Delete recording">${icon('trash')}</button></div></td></tr>`; }).join('')}</tbody></table>` : empty('Your first attempt belongs here.','Record a phrase to start your history. No scores, streaks, or progress are added until you practice.',btn('go-practice','Start practicing','mic','primary'))}</div></section>`;
+function renderProgressOverview() {
+  const now = new Date(), weekEnds = Array.from({length:8},(_,index) => { const date = new Date(now); date.setHours(23,59,59,999); date.setDate(date.getDate() - (7-index)*7); return date; });
+  const grammar = learning?.grammarTopics || [], known = (learning?.vocabulary || []).filter(item => item.status === 'known');
+  const assessed = [...state.attempts].filter(item => Number.isFinite(Number(item.assessment?.accuracy)));
+  const vocabularyHistory = learning?.vocabularyMastery || [];
+  const vocabularyPoints = weekEnds.map(end => {
+    const snapshot = vocabularyHistory.filter(item => item.recordedAt <= end.getTime()).at(-1);
+    return snapshot ? (snapshot.total ? 100 * snapshot.known / snapshot.total : 0) : null;
+  });
+  const grammarPoints = weekEnds.map(end => grammar.length ? 100 * grammar.filter(item => item.completedAt && item.completedAt <= end.getTime()).length / grammar.length : 0);
+  const pronunciationPoints = weekEnds.map(end => { const values = assessed.filter(item => new Date(item.createdAt) <= end).map(item => Number(item.assessment.accuracy)); return values.length ? values.reduce((sum,value) => sum + value,0) / values.length : 0; });
+  const chart = (label,value,note,points) => {
+    const visible = points.map((point,index) => ({point,index})).filter(item => Number.isFinite(item.point));
+    const coordinates = visible.map(({point,index}) => `${(index * 100 / Math.max(1,points.length-1)).toFixed(1)},${(100-Math.max(0,Math.min(100,point))).toFixed(1)}`).join(' ');
+    const summary = visible.map(({point,index}) => `${when(weekEnds[index])}: ${Math.round(point)}%`).join('; ');
+    return `<article class="mastery-card"><h2>${label}</h2><p><strong>${esc(value)}</strong> · ${note}</p><div class="mastery-chart" role="img" aria-label="${esc(`${label}. ${summary || 'No historical data yet.'}`)}"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${visible.length > 1 ? `<polyline points="${coordinates}"></polyline>` : ''}</svg>${visible.map(({point,index}) => `<span class="mastery-point" style="--x:${index * 100 / Math.max(1,points.length-1)}%;--y:${Math.max(0,Math.min(100,point))}%" title="${esc(when(weekEnds[index]))}: ${Math.round(point)}%"></span>`).join('')}</div></article>`;
+  };
+  const grammarDone = grammar.filter(item => item.completed).length;
+  return `<section class="progress-overview home-progress" aria-labelledby="home-progress-title"><div class="section-head"><div><p class="eyebrow">YOUR PROGRESS</p><h2 id="home-progress-title">See what is starting to stick.</h2><p>Real activity from your vocabulary, grammar, and pronunciation practice.</p></div><span class="badge outline">Last 8 weeks</span></div><div class="mastery-grid">${chart('Vocabulary mastery',`${known.length} of ${learning.vocabulary.length} known`,'Known-word snapshots from your vocabulary tracker',vocabularyPoints)}${chart('Grammar mastery',`${grammarDone} of ${grammar.length} principles`,'Completed grammar practices',grammarPoints)}${chart('Pronunciation mastery',assessed.length ? `${Math.round(pronunciationPoints.at(-1))}% average` : 'No assessed attempts','Accuracy from assessed recordings only',pronunciationPoints)}</div><div class="toolbar">${btn('export-backup','Export backup','download')}<a class="button" href="#pronunciation">Practice pronunciation ${icon('arrow')}</a></div></section>`;
 }
 function dialog(title,body,actions = '',formId = '') {
   const node = $('#editor-dialog');
+  node.classList.toggle('settings-dialog', formId === 'settings-form');
   $('#dialog-content').innerHTML = `${formId ? `<form id="${formId}">` : ''}<div class="dialog-header"><h2 id="dialog-title">${title}</h2><button type="button" class="icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('close')}</button></div><div class="dialog-body">${body}<p class="form-error" id="form-error" role="alert"></p></div><div class="dialog-actions">${btn('close-dialog','Cancel',null)}${actions}</div>${formId ? '</form>' : ''}`;
   node.showModal(); setTimeout(() => $('#dialog-content input:not([type=hidden]), #dialog-content textarea')?.focus(),0);
 }
@@ -165,11 +326,31 @@ function uploadDialog() {
 }
 function voiceDialog(id) {
   const voice = state.voices.find(v => v.id === id); if(!voice) return;
+  if($('#editor-dialog').open) $('#editor-dialog').close();
   dialog('Edit reference voice',`<input id="edit-voice-id" type="hidden" value="${esc(id)}"><div class="field"><label for="edit-voice-name">Display name</label><input id="edit-voice-name" required maxlength="100" value="${esc(voice.name)}"></div><div class="field"><label for="edit-voice-accent">Reference accent</label><select id="edit-voice-accent">${accentOptions(voice.accentId)}</select></div><div class="field"><label for="edit-voice-description">Speaker and delivery notes</label><textarea id="edit-voice-description" maxlength="500">${esc(voice.description || '')}</textarea></div>`,'<button type="submit" class="button primary">Save voice</button>','voice-edit-form');
+}
+function targetLanguagePicker() {
+  const selected = new Set(targetLanguages().map(item => item.code));
+  return `<div class="target-language-grid">${languages().map(item => `<label class="target-language-option"><input type="checkbox" name="target-languages" value="${esc(item.code)}"${selected.has(item.code) ? ' checked' : ''}><span>${esc(item.name)}</span></label>`).join('')}</div>`;
 }
 function settingsDialog() {
   const theme = state.settings.theme || 'system';
-  dialog('Your studio settings',`<section class="settings-section"><h3>Appearance</h3><div class="field"><label for="settings-theme">Color theme</label><select id="settings-theme"><option value="system"${theme === 'system' ? ' selected' : ''}>Use device setting</option><option value="light"${theme === 'light' ? ' selected' : ''}>Light</option><option value="dark"${theme === 'dark' ? ' selected' : ''}>Dark</option></select><small>Applies across every studio page and follows your device when set to automatic.</small></div></section><section class="settings-section"><h3>Listening direction</h3><div class="field"><label for="settings-accent">Default reference accent</label><select id="settings-accent">${accentOptions(state.settings.accentId)}</select></div></section><section class="settings-section"><h3>Optional pronunciation assessment</h3><p class="section-description">Send an attempt for word-level pronunciation feedback when you choose. Audio leaves this device only after you click “Assess pronunciation.”</p><label class="check-row"><input id="assessment-enabled" type="checkbox"${state.settings.assessmentEnabled ? ' checked' : ''}>Enable assessment through my configured speech service</label><div class="field row-gap"><label for="assessment-url">Assessment service address</label><input id="assessment-url" type="url" required value="${esc(state.settings.assessmentUrl)}"><small>The local bridge supports configured es-MX and es-ES assessment. Other accents remain available for shadowing. No Spanish intonation score is provided.</small></div><p class="reference-help">Run the assessment bridge with your speech account credentials; keys stay outside the extension. Setup instructions are in server/README.md.</p></section><section class="settings-section"><h3>Your saved practice</h3><p class="section-description">Recordings and references stay on this device. A studio backup includes their audio, voice configuration, phrases, and review history.</p><div class="flex-row">${btn('export-backup','Export backup','download','small')}${btn('import-backup','Import backup','upload','small')}</div></section>`,'<button type="submit" class="button primary">Save settings</button>','settings-form');
+  dialog('Language learning settings',`<section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('globe')}</span><div><h3>Your languages</h3><p>Choose what you are learning and how the studio should explain it.</p></div></div><div class="field"><label for="target-language">Study now</label><select id="target-language">${languageOptions(targetLang().code)}</select><small>This is the language currently shown throughout the app.</small></div><div class="field"><span class="field-label">Your target languages</span><p class="section-description">Choose the languages available in your quick switcher.</p>${targetLanguagePicker()}</div><div class="field"><label for="native-language">Show meanings in</label><select id="native-language">${languageOptions(nativeLang().code)}</select></div></section><section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('settings')}</span><div><h3>Appearance</h3><p>Keep the studio comfortable wherever you study.</p></div></div><div class="field"><label for="settings-theme">Color theme</label><select id="settings-theme"><option value="system"${theme === 'system' ? ' selected' : ''}>Use device setting</option><option value="light"${theme === 'light' ? ' selected' : ''}>Light</option><option value="dark"${theme === 'dark' ? ' selected' : ''}>Dark</option></select><small>Applies across every page and follows your device when set to automatic.</small></div></section><section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('wave')}</span><div><h3>Optional pronunciation assessment</h3><p>Connect a local speech service for word-level feedback.</p></div></div><p class="section-description">Audio leaves this device only after you explicitly choose “Assess pronunciation.”</p><label class="check-row"><input id="assessment-enabled" type="checkbox"${state.settings.assessmentEnabled ? ' checked' : ''}>Enable assessment through my configured speech service</label><div class="field row-gap"><label for="assessment-url">Assessment service address</label><input id="assessment-url" type="url" required value="${esc(state.settings.assessmentUrl)}"><small>The local bridge supports configured es-MX and es-ES assessment. Other regions remain available for shadowing.</small></div><p class="reference-help">Run the assessment bridge with your speech account credentials; keys stay outside the extension. Setup instructions are in server/README.md.</p></section><section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('download')}</span><div><h3>Your saved practice</h3><p>Back up recordings, references, phrases, and review history.</p></div></div><p class="section-description">Everything stays on this device unless you export a studio backup.</p><div class="flex-row">${btn('export-backup','Export backup','download','small')}${btn('import-backup','Import backup','upload','small')}</div></section>`,'<button type="submit" class="button primary">Save settings</button>','settings-form');
+}
+function voiceSettingsDialog() { dialog('Spanish voices and accents',renderVoices()); }
+function readSettingsForm(form) {
+  const assessmentUrl = $('#assessment-url',form).value.trim(), selectedTargets = $$('input[name="target-languages"]:checked',form).map(input => input.value);
+  if(!selectedTargets.length) throw new Error('Choose at least one target language.');
+  const url = new URL(assessmentUrl);
+  if(url.username || url.password || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname)))) throw new Error('Use HTTPS or a local loopback HTTP address for your assessment service, without credentials in the URL.');
+  return {assessmentUrl,assessmentEnabled:$('#assessment-enabled',form).checked,theme:$('#settings-theme',form).value,target:$('#target-language',form).value,native:$('#native-language',form).value,selectedTargets};
+}
+async function persistSettingsForm(form) {
+  const values = readSettingsForm(form);
+  await Promise.all([D.saveSettings({assessmentUrl:values.assessmentUrl,assessmentEnabled:values.assessmentEnabled,theme:values.theme}),L.setLanguages(values.target,values.native,values.selectedTargets)]);
+  if(L?.recordVocabularySnapshot) await L.recordVocabularySnapshot(values.target);
+  [state,learning] = await Promise.all([D.load(),L.load()]); ui.dictionaryResult = null; ui.mediaResponse = null; ui.grammarTopic = null;
+  if(!isSpanish()) ui.pronunciationTab = 'overview'; window.StudioTheme?.apply(values.theme);
 }
 let metadataToken = 0;
 function prepareReference() {
@@ -235,13 +416,13 @@ async function playUrl(url,start = 0,end = 0,role = 'other',loop = false) {
   player.currentTime = Math.max(0,start); player.playbackRate = p.speed;
   await resumePlayer(token); updatePlayback();
 }
-function speak(text) {
+function speak(text, requestedLocale) {
   if(!('speechSynthesis' in window)) throw new Error('Browser speech is unavailable. Upload reference audio or connect Voicebox.');
   stopAudio();
   const utterance = new SpeechSynthesisUtterance(text);
-  const locale = state.settings.accentId || 'es-MX', voices = speechSynthesis.getVoices();
+  const locale = requestedLocale || (page === 'pronunciation' && isSpanish() ? state.settings.accentId : targetLang().speechLang) || targetLang().code, voices = speechSynthesis.getVoices();
   utterance.lang = locale; utterance.rate = p.speed;
-  utterance.voice = voices.find(v => v.lang.toLowerCase() === locale.toLowerCase()) || voices.find(v => /^es[-_]/i.test(v.lang)) || null;
+  utterance.voice = voices.find(v => v.lang.toLowerCase() === locale.toLowerCase()) || voices.find(v => v.lang.toLowerCase().startsWith(targetLang().code.toLowerCase())) || null;
   utterance.onerror = event => {if(!['interrupted','canceled'].includes(event.error)) report(new Error('Browser speech is unavailable. Add a native clip or Voicebox reference.'));};
   ui.utterance = utterance; speechSynthesis.speak(utterance);
 }
@@ -277,11 +458,11 @@ function recordingUI() {
   const timer = $('#record-timer'), meter = $('#level-meter'); if(timer) timer.hidden = !p.recording; if(meter) meter.hidden = !p.recording;
   if(timer) timer.textContent = `${clipTime((Date.now()-p.startedAt)/1000)} / 0:30`;
   const help = $('#record-help'); if(help) help.textContent = p.recording ? 'Reference muted. Speak naturally, then finish your recording.' : 'The reference pauses while you record. Up to 30 seconds; saved on this device.';
-  if(page === 'practice') $$('#main button, #main input, #main select, #main textarea').forEach(node => {
+  if(page === 'pronunciation' && ui.pronunciationTab === 'practice') $$('#main button, #main input, #main select, #main textarea').forEach(node => {
     if(node.id === 'record-button' || node.dataset.action === 'cancel-generation') return;
     if(p.recording || p.starting || p.saving) {node.dataset.recordDisabled = node.disabled ? 'yes' : 'no'; node.disabled = true;}
   });
-  if(state) $('#global-accent').disabled = busy();
+  const globalAccent = $('#global-accent'); if(globalAccent) globalAccent.disabled = busy();
 }
 async function record() {
   if(p.recording) {
@@ -382,13 +563,41 @@ async function action(name,node) {
   if(busy() && !['record','cancel-generation','close-dialog','stop-audio'].includes(name)) return notify('Finish your current recording or request first.');
   const id = node.dataset.id;
   switch(name) {
-    case 'start-phrase': return go('practice',id);
-    case 'test-phrase': p.mode = 'test'; return go('practice',id);
-    case 'go-practice': return go('practice');
-    case 'go-library': return go('library');
+    case 'start-phrase': ui.pronunciationTab = 'practice'; return go('pronunciation',id);
+    case 'test-phrase': p.mode = 'test'; ui.pronunciationTab = 'practice'; return go('pronunciation',id);
+    case 'go-practice': ui.pronunciationTab = 'practice'; return go('pronunciation');
+    case 'go-library': if($('#editor-dialog').open) $('#editor-dialog').close(); ui.pronunciationTab = 'library'; return go('pronunciation');
+    case 'pronunciation-tab': ui.pronunciationTab = node.dataset.tab || 'overview'; stopAudio(); render(); return featureFocus();
+    case 'resource-home': ui.resourceView = 'home'; ui.grammarTopic = null; ui.mediaResponse = null; ui.pronunciationTab = 'overview'; ui.vocabPractice = 'list'; stopAudio(); render(); return featureFocus();
+    case 'resource-view': ui.resourceView = node.dataset.view; render(); return featureFocus();
+    case 'open-listening': go('media'); ui.resourceView = 'listening'; render(); return featureFocus();
+    case 'speak-sample': return speak(`This is a browser voice sample for ${targetLang().name}.`);
+    case 'vocab-practice': ui.resourceView = 'practice'; ui.vocabPractice = node.dataset.mode || 'meaning'; ui.revealed = false; ui.reviewId = null; return render();
+    case 'close-vocab-practice': ui.resourceView = 'home'; ui.vocabPractice = 'list'; ui.revealed = false; return render();
+    case 'reveal-learning-word': ui.revealed = true; return render();
+    case 'speak-learning-word': {const word = learning.vocabulary.find(item => item.id === id); if(word) return speak(word.word); return;}
+    case 'rate-learning-word': {
+      const words = learning.vocabulary.filter(word => word.meaning); const index = Math.max(0,words.findIndex(word => word.id === id));
+      if(isSpanish()) { const studioWord = state.vocabulary.find(word => word.id === id || word.word === learning.vocabulary.find(item => item.id === id)?.word); if(studioWord) await D.rateReview('meaning',studioWord.id,node.dataset.rating); }
+      ui.reviewId = words.length > 1 ? words[(index + 1) % words.length].id : id; ui.revealed = false; notify(isSpanish() ? 'Meaning review scheduled. Here is the next word.' : 'Here is the next word.'); return render();
+    }
+    case 'open-grammar-practice': ui.grammarTopic = id; render(); return featureFocus();
+    case 'close-grammar-practice': ui.grammarTopic = null; return render();
+    case 'complete-grammar': return mutateLearning(() => L.completeActivity(id),'Grammar practice marked complete.');
+    case 'open-media': { const item = learning.media.find(entry => entry.id === id); if(!item || (item.origin === 'provided' && item.experience === 'carefree')) return; ui.mediaResponse = id; render(); return setTimeout(() => $('#media-response-form textarea')?.focus(),0); }
+    case 'close-media-response': ui.mediaResponse = null; return render();
+    case 'speak-media': {const item = learning.media.find(entry => entry.id === id); if(item) return speak(item.text); return;}
+    case 'play-media-audio': {const item = learning.media.find(entry => entry.id === id); if(item?.audioUrl) return playUrl(item.audioUrl,0,0,'media'); return;}
+    case 'complete-media': return mutateLearning(() => L.completeActivity(id),'Media activity marked complete.');
     case 'new-phrase': return phraseDialog();
     case 'edit-phrase': return phraseDialog(id);
     case 'open-settings': return settingsDialog();
+    case 'open-voice-settings': {
+      operation = true;
+      try { const form = $('#settings-form'); if(form) await persistSettingsForm(form); else { await D.saveSettings({accentId:state.settings.accentId}); state = await D.load(); } }
+      finally { operation = false; }
+      $('#editor-dialog').close(); return voiceSettingsDialog();
+    }
     case 'edit-voice': return voiceDialog(id);
     case 'close-dialog': if(operation) return; $('#editor-dialog').close(); return;
     case 'upload-reference': return uploadDialog();
@@ -398,7 +607,12 @@ async function action(name,node) {
       stopAudio(); return mutate(() => D.removePhrase(id),'Phrase and its recordings deleted.');
     }
     case 'delete-attempt': if(!confirm('Delete this recording and its saved assessment?')) return; stopAudio(); return mutate(() => D.removeAttempt(id),'Recording deleted.');
-    case 'delete-voice': if(!confirm('Remove this voice configuration? Existing reference clips and recordings will remain.')) return; return mutate(() => D.removeVoice(id),'Voice removed. Saved audio is still available.');
+    case 'delete-voice': {
+      if(!confirm('Remove this voice configuration? Existing reference clips and recordings will remain.')) return;
+      await mutate(() => D.removeVoice(id),'Voice removed. Saved audio is still available.');
+      if($('#editor-dialog').open) { $('#editor-dialog').close(); voiceSettingsDialog(); }
+      return;
+    }
     case 'mode': stopAudio(); p.mode = node.dataset.mode; p.testAttemptId = null; ui.attemptId = null; ui.comparison = null; return render();
     case 'toggle-translation': p.translation = !p.translation; return render();
     case 'toggle-loop': p.loop = !p.loop; if(playback.role === 'current') playback.loop = p.loop; return render();
@@ -414,10 +628,10 @@ async function action(name,node) {
       if(playback.role === 'current' && playback.url === ref.audioUrl && player.currentTime >= p.start && (!activeEnd || player.currentTime < activeEnd - .03)) {await resumePlayer(); return;}
       return playUrl(ref.audioUrl,p.start,p.end,'current',p.loop);
     }
-    case 'play-attempt': {if(page === 'practice' && hiddenReference()) return; const attempt = state.attempts.find(a => a.id === id); if(attempt) return playUrl(attempt.audioUrl,0,0,'attempt'); return;}
+    case 'play-attempt': {if(page === 'pronunciation' && ui.pronunciationTab === 'practice' && hiddenReference()) return; const attempt = state.attempts.find(a => a.id === id); if(attempt) return playUrl(attempt.audioUrl,0,0,'attempt'); return;}
     case 'play-attempt-reference': {if(hiddenReference()) return; const snap = state.attempts.find(a => a.id === id)?.referenceSnapshot; if(snap) return playUrl(snap.audioUrl,snap.start || 0,snap.end || 0,'snapshot'); return;}
     case 'select-attempt': ui.attemptId = id; ui.comparison = null; stopAudio(); return render();
-    case 'open-attempt': {const attempt = state.attempts.find(a => a.id === id); if(!attempt) return; p.mode = 'practice'; go('practice',attempt.phraseId); ui.attemptId = id; return render();}
+    case 'open-attempt': {const attempt = state.attempts.find(a => a.id === id); if(!attempt) return; p.mode = 'practice'; ui.pronunciationTab = 'practice'; go('pronunciation',attempt.phraseId); ui.attemptId = id; return render();}
     case 'record': return record();
     case 'generate-reference': return generate($('#generate-voice').value);
     case 'cancel-generation': generationController?.abort(); return;
@@ -434,9 +648,10 @@ async function action(name,node) {
       const name = $(`#profile-name-${index}`).value.trim(), accentId = $(`#profile-accent-${index}`).value;
       if(!name) throw new Error('Give your reference voice a display name.');
       const existing = state.voices.find(v => v.profileId === profile.id && v.baseUrl === ui.profilesUrl);
-      return mutate(() => D.saveVoice({id:existing?.id,profileId:profile.id,name,accentId,baseUrl:ui.profilesUrl}),'Reference voice saved.');
+      await mutate(() => D.saveVoice({id:existing?.id,profileId:profile.id,name,accentId,baseUrl:ui.profilesUrl}),'Reference voice saved.');
+      if($('#editor-dialog').open) { $('#editor-dialog').close(); voiceSettingsDialog(); }
+      return;
     }
-    case 'set-accent': return mutate(() => D.saveSettings({accentId:id}),`${accent(id).label} selected.`);
     case 'review-kind': stopAudio(); ui.reviewKind = node.dataset.kind; ui.revealed = false; return render();
     case 'reveal-card': ui.revealed = true; return render();
     case 'speak-card': {const word = state.vocabulary.find(w => w.id === id); if(word) return speak(word.word); return;}
@@ -451,6 +666,24 @@ async function action(name,node) {
 }
 async function submit(form) {
   if(busy()) return;
+  if(form.id === 'dictionary-form') {
+    if(!L?.lookup) throw new Error('Dictionary lookup is unavailable. Reload the extension and try again.');
+    const term = $('#dictionary-term').value.trim(); if(!term) throw new Error('Enter a word or short phrase to look up.');
+    operation = true; const button = form.querySelector('button'); button.disabled = true;
+    try { ui.dictionaryResult = await L.lookup(term); learning = await L.load(); }
+    finally { operation = false; render(); }
+    return;
+  }
+  if(form.id === 'media-response-form') {
+    const itemId = $('#media-item-id').value, writing = $('#media-writing-response').value.trim(), speaking = $('#media-speaking-response').value.trim();
+    const mediaItem = learning.media.find(item => item.id === itemId);
+    if(!mediaItem || (mediaItem.origin === 'provided' && mediaItem.experience === 'carefree')) throw new Error('This media item does not accept responses.');
+    if(!writing && !speaking) throw new Error('Write a response or add a reflection after speaking aloud.');
+    return mutateLearning(async () => {
+      if(writing) await L.saveMediaResponse({itemId,mode:'writing',text:writing});
+      if(speaking) await L.saveMediaResponse({itemId,mode:'speaking',text:speaking});
+    },'Your media responses were saved.');
+  }
   if(form.id === 'voice-connect-form') {
     const baseUrl = $('#voicebox-url').value.trim(), permission = A.requestAccess(baseUrl);
     operation = true; form.querySelector('button').disabled = true;
@@ -459,7 +692,10 @@ async function submit(form) {
       ui.profiles = await A.listVoiceboxProfiles(baseUrl); ui.profilesUrl = baseUrl;
       await D.saveSettings({voiceboxUrl:baseUrl}); state = await D.load();
       notify(ui.profiles.length ? `${ui.profiles.length} voice profiles found. Assign an accent below.` : 'Connected. Create a voice profile in Voicebox, then load profiles again.');
-    } finally {operation = false; render();}
+    } finally {
+      operation = false; render();
+      if($('#editor-dialog').open) { $('#editor-dialog').close(); voiceSettingsDialog(); }
+    }
     return;
   }
   if(form.id === 'phrase-form') {
@@ -497,23 +733,26 @@ async function submit(form) {
     const voice = state.voices.find(v => v.id === $('#edit-voice-id').value); if(!voice) throw new Error('This voice is no longer available.');
     const name = $('#edit-voice-name').value.trim(), accentId = $('#edit-voice-accent').value, description = $('#edit-voice-description').value.trim();
     if(!name) throw new Error('Enter a voice name.');
-    await mutate(() => D.saveVoice({...voice,name,accentId,description}),'Voice updated.'); $('#editor-dialog').close(); return;
+    await mutate(() => D.saveVoice({...voice,name,accentId,description}),'Voice updated.');
+    if($('#editor-dialog').open) $('#editor-dialog').close(); voiceSettingsDialog(); return;
   }
   if(form.id === 'settings-form') {
-    const assessmentUrl = $('#assessment-url').value.trim(), assessmentEnabled = $('#assessment-enabled').checked, accentId = $('#settings-accent').value, theme = $('#settings-theme').value;
-    const url = new URL(assessmentUrl);
-    if(url.username || url.password || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname)))) throw new Error('Use HTTPS or a local loopback HTTP address for your assessment service, without credentials in the URL.');
-    await mutate(() => D.saveSettings({assessmentUrl,assessmentEnabled,accentId,theme}),'Studio settings saved.'); window.StudioTheme?.apply(theme); $('#editor-dialog').close(); return;
+    if(!L?.setLanguages) throw new Error('Language profiles are unavailable. Reload the extension and try again.');
+    operation = true;
+    try {
+      await persistSettingsForm(form); $('#editor-dialog').close(); notify('Language learning settings saved.');
+    } finally { operation = false; render(); }
+    return;
   }
 }
 document.addEventListener('click',event => {
   const link = event.target.closest('a[href^="#"]');
-  if(link && pages[link.getAttribute('href').slice(1)]) {event.preventDefault(); go(link.getAttribute('href').slice(1)); return;}
+  if(link) { const route = link.getAttribute('href').slice(1); if(pages[route] || aliases[route]) {event.preventDefault(); go(route); return;} }
   const node = event.target.closest('[data-action]'); if(!node || node.disabled) return;
   event.preventDefault(); Promise.resolve(action(node.dataset.action,node)).catch(report);
 });
 document.addEventListener('submit',event => {
-  if(!['phrase-form','upload-form','voice-connect-form','voice-edit-form','settings-form'].includes(event.target.id)) return;
+  if(!['dictionary-form','media-response-form','phrase-form','upload-form','voice-connect-form','voice-edit-form','settings-form'].includes(event.target.id)) return;
   event.preventDefault(); submit(event.target).catch(report);
 });
 document.addEventListener('input',event => {
@@ -534,6 +773,18 @@ document.addEventListener('change',event => {
     }
     if(busy()) return;
     switch(node.id) {
+      case 'study-language-switch': {
+        if(node.value === targetLang().code) return;
+        operation = true; node.disabled = true; stopAudio();
+        try {
+          learning = await L.setLanguages(node.value,nativeLang().code,targetLanguages().map(item => item.code));
+          if(L?.recordVocabularySnapshot) await L.recordVocabularySnapshot(node.value);
+          learning = await L.load();
+          ui.dictionaryResult = null; ui.mediaResponse = null; ui.grammarTopic = null; ui.resourceView = 'home'; ui.pronunciationTab = 'overview';
+          notify(`Now studying ${targetLang().name}.`);
+        } finally { operation = false; render(); }
+        return;
+      }
       case 'global-accent': stopAudio(); return mutate(() => D.saveSettings({accentId:node.value}),`${accent(node.value).label} selected.`);
       case 'library-source': ui.source = node.value; return render();
       case 'practice-phrase': initPhrase(node.value); return render();
@@ -547,33 +798,49 @@ document.addEventListener('change',event => {
   run().catch(report);
 });
 window.addEventListener('hashchange',() => {
-  const next = location.hash.slice(1); if(!pages[next]) return;
+  const next = location.hash.slice(1); if(!pages[next] && !aliases[next]) return;
   if(busy()) {history.replaceState(null,'',`${location.pathname}${location.search}#${page}`); notify('Finish your current recording or request first.'); return;}
   go(next);
 });
-window.addEventListener('popstate',() => {const next = location.hash.slice(1); if(pages[next] && next !== page) go(next);});
+window.addEventListener('popstate',() => {const next = location.hash.slice(1); if((pages[next] || aliases[next]) && resolveRoute(next)[0] !== page) go(next);});
 window.addEventListener('beforeunload',event => {if(p.recording || p.starting || p.saving || p.generating) {event.preventDefault(); event.returnValue = '';}});
-window.addEventListener('pagehide',() => {stopAudio(); p.recorder?.cancel(); generationController?.abort(); clearInterval(p.timer);});
+window.addEventListener('pagehide',() => {mountedPersonalization?.unmount?.(); stopAudio(); p.recorder?.cancel(); generationController?.abort(); clearInterval(p.timer);});
 $('#editor-dialog').addEventListener('cancel',event => {if(operation) event.preventDefault();});
 async function boot() {
   $$('[data-icon]').forEach(node => {node.innerHTML = icon(node.dataset.icon);});
   if(!D || !A) throw new Error('Studio files are missing. Reload the extension with study-data.js and study-audio.js included.');
-  state = await D.init(); window.StudioTheme?.apply(state.settings.theme || 'system'); page = pages[location.hash.slice(1)] ? location.hash.slice(1) : 'today';
-  initPhrase(new URLSearchParams(location.search).get('phrase')); render();
+  state = await D.init();
+  if(L?.recordVocabularySnapshot) await L.recordVocabularySnapshot();
+  learning = await loadLearning(); window.StudioTheme?.apply(state.settings.theme || 'system');
+  const initialRoute = resolveRoute(location.hash.slice(1)); page = initialRoute[0]; if(initialRoute[1]) ui.pronunciationTab = initialRoute[1];
+  const linkedPhrase = new URLSearchParams(location.search).get('phrase');
+  if(linkedPhrase && page === 'pronunciation' && isSpanish()) ui.pronunciationTab = 'practice';
+  if(location.hash !== `#${page}`) history.replaceState(null,'',`${location.pathname}${location.search}#${page}`);
+  initPhrase(linkedPhrase); render();
   D.subscribe(async () => {
     const version = ++pendingReload;
     try {
-      const fresh = await D.load(); if(version !== pendingReload) return; state = fresh; window.StudioTheme?.apply(state.settings.theme || 'system');
+      const fresh = await D.load();
+      if(L?.recordVocabularySnapshot) await L.recordVocabularySnapshot();
+      const freshLearning = await loadLearning(); if(version !== pendingReload) return; state = fresh; learning = freshLearning; window.StudioTheme?.apply(state.settings.theme || 'system');
       if(busy()) return; shell();
       if($('#editor-dialog').open || ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) return;
-      if(page === 'practice' && phrase()) {
+      if(page === 'pronunciation' && ui.pronunciationTab === 'practice' && phrase()) {
         // Refresh the selector only: never replace the active session or its transcript.
         const select = $('#practice-phrase'); if(select) select.innerHTML = state.phrases.map(item => option(item.id,item.text,p.phraseId)).join('');
       } else render();
     } catch(error) {report(error);}
   });
+  if(window.chrome?.storage?.onChanged) chrome.storage.onChanged.addListener(async (changes,area) => {
+    if(area !== 'local') return;
+    const changedTargets = [...new Set(Object.keys(changes).filter(key => key.startsWith('sptubeVocabulary_')).map(key => key.slice('sptubeVocabulary_'.length)))];
+    if(!changedTargets.length) return;
+    try {
+      if(L?.recordVocabularySnapshot) for(const code of changedTargets) await L.recordVocabularySnapshot(code);
+      learning = await loadLearning();
+      if(!busy() && ['home','vocabulary'].includes(page) && !$('#editor-dialog').open) render();
+    } catch(error) {report(error);}
+  });
 }
 boot().catch(error => {$('#main').innerHTML = `<div class="card">${empty('The studio could not open.',error.message)}</div>`; report(error);});
 })();
-
-

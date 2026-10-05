@@ -7,30 +7,29 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header class="brand"><span class="brand-symbol" aria-hidden="true">g<span>t</span></span><div><strong>Gift of Tongues</strong><p id="headerSub">Spanish, in your own rhythm.</p></div><span id="headerFlag" class="language-badge">ES</span></header>
+  <header class="brand"><span class="brand-symbol" aria-hidden="true">g<span>t</span></span><div><strong>Gift of Tongues</strong><p id="headerSub">Your language learning home.</p></div><span id="headerFlag" class="language-badge">ES</span></header>
   <main>
     <section class="practice-card" aria-labelledby="practiceHeading">
-      <p class="eyebrow">A LITTLE PRACTICE. A CLEARER VOICE.</p>
-      <h1 id="practiceHeading">Make it<br>sound like you.</h1>
-      <p>Listen closely. Speak freely.<br>Find your rhythm in Spanish.</p>
-      <button id="openStudioBtn" class="primary">Open shadowing studio <span aria-hidden="true">↗</span></button>
-      <span class="practice-note" id="practiceNote">Short phrases. Real progress.</span>
+      <p class="eyebrow">YOUR PERSONAL LEARNING PATH</p>
+      <h1 id="practiceHeading">Keep every skill<br>moving forward.</h1>
+      <p>Build vocabulary, grammar, pronunciation, and real-world understanding.</p>
+      <button id="openStudioBtn" class="primary">Open My Path <span aria-hidden="true">↗</span></button>
+      <span class="practice-note" id="practiceNote">One place for balanced practice.</span>
     </section>
-    <div class="stats" aria-label="Vocabulary progress"><div><strong id="learningCount">0</strong><span>words learning</span></div><div><strong id="knownCount">0</strong><span>words known</span></div><button id="openManagerBtn" class="text-button">Your library <span aria-hidden="true">→</span></button></div>
+    <div class="stats" aria-label="Vocabulary progress"><div><strong id="learningCount">0</strong><span>words learning</span></div><div><strong id="knownCount">0</strong><span>words known</span></div><button id="openManagerBtn" class="text-button">Vocabulary <span aria-hidden="true">→</span></button></div>
     <section class="reader-section" id="readerSection" aria-labelledby="readingHeading">
       <div class="section-title"><h2 id="readingHeading">Collect as you browse</h2><span class="small-tag">WEB</span></div>
       <div class="setting-row"><div class="setting-text"><label class="setting-label" for="readerModeToggle">Recognize words on this site</label><p class="setting-desc" id="readerSiteLabel">Current website</p></div><label class="switch"><input type="checkbox" id="readerModeToggle"><span class="switch-track" aria-hidden="true"></span></label></div>
       <p id="readerUnavailable" class="setting-desc" style="display:none">Open a website to enable word recognition.</p>
       <p class="reader-tip">Select a phrase on a page or in YouTube captions to save it for practice.</p>
     </section>
-    <details class="settings"><summary>Languages &amp; vocabulary tools</summary><div class="settings-content">
+    <details class="settings"><summary>Languages &amp; study tools</summary><div class="settings-content">
       <label for="languageSelect">Language you’re learning</label><select id="languageSelect"></select>
       <label for="nativeLanguageSelect">Show meanings in</label><select id="nativeLanguageSelect"></select>
       <button id="openCatchupBtn" class="secondary">Vocabulary catch-up</button><p id="catchupSub" class="setting-desc"></p>
-      <button id="legacyManagerBtn" class="text-button">Open vocabulary editor <span aria-hidden="true">↗</span></button>
     </div></details>
   </main>
-  <footer>FROM THE WORDS YOU FIND TO THE WAY YOU SPEAK</footer>
+  <footer>LEARN THE LANGUAGE. USE THE LANGUAGE.</footer>
   <script src="languages.js"></script><script src="study-data.js"></script><script src="popup.js"></script>
 </body>
 </html>

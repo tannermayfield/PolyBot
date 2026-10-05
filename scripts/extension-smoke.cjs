@@ -124,7 +124,7 @@ async function main() {
     await popup.goto(`${extensionOrigin}/popup.html`);
     await poll(() => popup.locator('#learningCount').textContent(), value => value === '2', 'Spanish learning count');
     assert.equal(await popup.locator('#knownCount').textContent(), '1');
-    await poll(() => popup.locator('#practiceNote').textContent(), value => value === '1 phrase ready to practice', 'Practice queue count');
+    await poll(() => popup.locator('#practiceNote').textContent(), value => value === '1 pronunciation phrase ready', 'Practice queue count');
     await popup.locator('details.settings > summary').click();
     await popup.locator('#languageSelect').selectOption('fr');
     await poll(() => popup.locator('#knownCount').textContent(), value => value === '2', 'French known count');
@@ -134,12 +134,12 @@ async function main() {
     const frenchTab = context.waitForEvent('page');
     await popup.locator('#openManagerBtn').click();
     const manager = await frenchTab;
-    await manager.waitForURL(`${extensionOrigin}/manager.html`);
+    await manager.waitForURL(`${extensionOrigin}/studio.html#vocabulary`);
     await manager.close();
     await popup.locator('#languageSelect').selectOption('es');
     await poll(() => popup.locator('#knownCount').textContent(), value => value === '1', 'Spanish restored count');
     assert.equal(await popup.locator('#openCatchupBtn').isDisabled(), false);
-    checked.push('popup vocabulary counts, practice queue, language switching and legacy-manager routing');
+    checked.push('popup vocabulary counts, practice queue, language switching and learning-app routing');
 
     const captured = await popup.evaluate(audioUrl => chrome.runtime.sendMessage({ type: 'SAVE_STUDIO_PHRASE',
       text: 'Una frase capturada.', translation: 'A captured phrase.', audioUrl }), audio);
@@ -155,7 +155,7 @@ async function main() {
     assert.equal(await worker.evaluate(async () => (await StudioData.load()).phrases.length), beforeInvalid);
     const openResponse = await popup.evaluate(id => chrome.runtime.sendMessage({ type: 'OPEN_STUDIO', phraseId: id, lang: 'es' }), captured.id);
     assert.equal(openResponse.ok, true);
-    const deepLink = `${extensionOrigin}/studio.html?phrase=${encodeURIComponent(captured.id)}#practice`;
+    const deepLink = `${extensionOrigin}/studio.html?phrase=${encodeURIComponent(captured.id)}#pronunciation`;
     await poll(() => Promise.resolve(context.pages().map(page => page.url())), urls => urls.includes(deepLink), 'Practice deep link');
     // Read browser tab URLs without requesting an additional extension tabs permission.
     for (const page of context.pages()) if (page.url() === deepLink) await page.close();
@@ -209,7 +209,7 @@ async function main() {
     assert.equal(savedSelection.source, 'web');
     assert.equal(savedSelection.sourceUrl, FIXTURE_URL);
     assert.equal(savedSelection.references.length, 0, 'Fixture without video must not invent source audio');
-    const selectionLink = `${extensionOrigin}/studio.html?phrase=${encodeURIComponent(savedSelection.id)}#practice`;
+    const selectionLink = `${extensionOrigin}/studio.html?phrase=${encodeURIComponent(savedSelection.id)}#pronunciation`;
     await poll(() => Promise.resolve(context.pages().map(page => page.url())), urls => urls.includes(selectionLink), 'Caption capture opens its practice phrase');
     assert.ok(await worker.evaluate(() => globalThis.__smokeTranslations > 0));
     const raw = await worker.evaluate(() => chrome.storage.local.get(['sptubePhrases_es', 'sptubePhrases_fr']));

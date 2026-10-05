@@ -32,7 +32,7 @@ Use short matching text and audio, between 0.2 and 30 seconds. A reference segme
 
 ## Voicebox references
 
-Run Voicebox locally (the studio default is `http://127.0.0.1:17493`). Connect in Voices, import a profile, assign its regional label, and generate a reference from a Spanish phrase. The app calls `GET /profiles`, `POST /generate` with `language: 'es'`, polls `GET /history/{id}` for queued generations, and downloads `GET /history/{id}/export-audio`. Generation times out after two minutes; stopping the wait does not cancel a job already accepted by Voicebox. Voice setup and cloning occur in Voicebox. Confirm the chosen engine supports Spanish and listen to a generated sample before using it as a regional reference. No default voices or reference recordings are fabricated.
+Run Voicebox locally (the studio default is `http://127.0.0.1:17493`). Open Settings, expand Spanish under target languages, and choose **Manage Spanish reference voices**. Import a profile, assign its regional label, and generate a reference from a Spanish phrase. The app calls `GET /profiles`, `POST /generate` with `language: 'es'`, polls `GET /history/{id}` for queued generations, and downloads `GET /history/{id}/export-audio`. Generation times out after two minutes; stopping the wait does not cancel a job already accepted by Voicebox. Voice setup and cloning occur in Voicebox. Confirm the chosen engine supports Spanish and listen to a generated sample before using it as a regional reference. No default voices or reference recordings are fabricated.
 
 ## Primary references
 

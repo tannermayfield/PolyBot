@@ -152,3 +152,22 @@ def test_settings_require_exact_extension_origins(monkeypatch):
         Settings.from_env()
     monkeypatch.setenv("POLYBOT_ALLOWED_ORIGINS", f"{EXTENSION}, ")
     assert Settings.from_env().allowed_origins == frozenset({EXTENSION})
+
+
+def test_pipeline_can_be_triggered_over_http(pipeline_url):
+    from conftest import reset_data
+    client = TestClient(create_app(Settings(pipeline_url, frozenset({EXTENSION}))))
+    learner = str(uuid.uuid4())
+    sent = batch(1)
+    sent["learner_id"] = learner
+    sent["events"] = [{**event(learner, "learner_registered"), "language": None, "context": {},
+                       "payload": {"native_language": "en", "consent_version": 1}}]
+    sent["events"][0].pop("language")
+    assert client.post("/v1/event-batches", json=sent).status_code == 202
+    try:
+        response = client.post("/v1/pipeline-runs", headers={"Origin": EXTENSION})
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["status"], body["rows_processed"], body["rows_valid"]) == ("succeeded", 1, 1)
+    finally:
+        reset_data(pipeline_url)

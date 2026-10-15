@@ -88,3 +88,35 @@ The status line under the box shows how many events are waiting and when they we
 ```
 
 Everything stays `pending` until the Phase 4 pipeline validates it.
+
+## 7. Process events (Phase 4 pipeline)
+
+```powershell
+.venv\Scripts\python -m polybot_insights.pipeline
+```
+
+Validates every `pending` row in `raw.events` against the 19 rules in docs/EVENT_TAXONOMY.md §7 and loads valid events into `core.*` (events, attempts, assessments, explicit preferences, sessions). Invalid events stay in `raw.events` as `invalid`, with the reasons in `ops.validation_issues`; nothing is deleted. Each run is one row in `ops.pipeline_runs`:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U polybot_app -h 127.0.0.1 -d polybot -c "SELECT run_id, status, rows_processed, rows_valid, rows_invalid, rows_duplicate FROM ops.pipeline_runs ORDER BY run_id DESC LIMIT 5"
+```
+
+The same run is available at `POST http://127.0.0.1:17495/v1/pipeline-runs`.
+
+## 8. Simulated learners (no extension needed)
+
+```powershell
+.venv\Scripts\python -m polybot_insights.simulator --learners 25 --days 45 --seed 7 --run-pipeline
+```
+
+**Use a separate database for simulations**, so simulated learners never mix with your own data. Once, in `psql` as `postgres`: `CREATE DATABASE polybot_sim OWNER polybot_app;`, then for that PowerShell window:
+
+```powershell
+$env:POLYBOT_DATABASE_URL = "postgresql://polybot_app:<your password>@127.0.0.1:5432/polybot_sim"
+.venv\Scripts\python -m polybot_insights.db.migrate
+.venv\Scripts\python -m polybot_insights.catalog
+```
+
+(An environment variable set in the window wins over `.env`; close the window to go back to your real database.) The simulator refuses to run against a database that already holds a real learner unless you pass `--allow-real-learners`.
+
+Creates learners with hidden traits and realistic practice histories (about 25,000 events for the defaults), stores them through the same ingest code as the extension, and runs the pipeline. They are marked `is_synthetic`; anything built on them must be described as simulated (ADR-003). `--invalid-rate` (default `0.005`) deliberately corrupts a few events so you can watch validation quarantine them.

@@ -1,43 +1,28 @@
-"""Ingest API: receives event batches from the extension and lands them in ``raw``.
+"""Insights HTTP API (ADR-001, ADR-014).
 
-Only light shape checks happen here. Full validation (EVENT_TAXONOMY §7) belongs to the
-Phase 4 pipeline, which reads ``raw.events`` rows with ``status = 'pending'``. Keeping
-ingest dumb means a validation bug can never lose data: every event is stored as sent.
+Ingest does only light shape checks. Full validation (EVENT_TAXONOMY §7) belongs to the
+pipeline, which reads ``raw.events`` rows with ``status = 'pending'``. Keeping ingest dumb
+means a validation bug can never lose data: every event is stored as sent.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Annotated, Any, Callable, Literal
-from uuid import UUID
+from typing import Callable
 
 import psycopg
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from psycopg.types.json import Jsonb
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
 from polybot_insights.config import Settings
+from polybot_insights.ingest import MAX_BODY_BYTES, MAX_EVENTS, EventBatch, store_batch
+from polybot_insights.pipeline.run import run_pipeline
 
 log = logging.getLogger("polybot_insights.api")
 
-MAX_BODY_BYTES = 1024 * 1024
-MAX_EVENTS = 500
-
-
-class EventBatch(BaseModel):
-    """EVENT_TAXONOMY §2.1. Unknown top-level fields are rejected."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    batch_id: UUID
-    learner_id: UUID
-    source: Literal["extension", "simulator", "backfill"]
-    sent_at: datetime
-    dropped_since_last_sync: Annotated[int, Field(ge=0)]
-    events: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=MAX_EVENTS)]
+__all__ = ["create_app", "main", "MAX_BODY_BYTES", "MAX_EVENTS", "EventBatch"]
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -46,7 +31,7 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
 
 def create_app(settings: Settings, connect: Callable[[], psycopg.Connection] | None = None) -> FastAPI:
     connect = connect or (lambda: psycopg.connect(settings.database_url, connect_timeout=3))
-    app = FastAPI(title="Polybot Insights", version="0.1.0")
+    app = FastAPI(title="Polybot Insights", version="0.2.0")
     app.add_middleware(CORSMiddleware, allow_origins=sorted(settings.allowed_origins),
                        allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
@@ -85,32 +70,32 @@ def create_app(settings: Settings, connect: Callable[[], psycopg.Connection] | N
             return _error(422, "invalid_batch", f"Invalid batch fields: {', '.join(fields) or 'body'}.")
 
         try:
-            with connect() as conn, conn.transaction():
-                stored = conn.execute(
-                    """INSERT INTO raw.event_batches
-                         (batch_id, claimed_learner_id, source, event_count, payload_bytes, dropped_since_last_sync)
-                       VALUES (%s, %s, %s, %s, %s, %s)
-                       ON CONFLICT (batch_id) DO NOTHING
-                       RETURNING batch_id""",
-                    (batch.batch_id, batch.learner_id, batch.source, len(batch.events), len(body),
-                     batch.dropped_since_last_sync),
-                ).fetchone()
-                if stored is None:
-                    log.info("operation=ingest status=duplicate batch_id=%s", batch.batch_id)
-                    return JSONResponse(status_code=200, content={"batch_id": str(batch.batch_id),
-                                                                  "duplicate_batch": True, "accepted": 0})
-                with conn.cursor() as cur:
-                    cur.executemany("INSERT INTO raw.events (batch_id, body) VALUES (%s, %s)",
-                                    [(batch.batch_id, Jsonb(event)) for event in batch.events])
+            with connect() as conn:
+                result = store_batch(conn, batch, len(body))
         except psycopg.Error as error:
             # 503 tells the extension to keep the batch and retry with backoff.
             log.error("operation=ingest status=failed batch_id=%s error=%s", batch.batch_id, type(error).__name__)
             return _error(503, "storage_unavailable", "Events could not be stored; retry later.")
 
+        content = {"batch_id": str(result.batch_id), "duplicate_batch": result.duplicate, "accepted": result.accepted}
+        if result.duplicate:
+            log.info("operation=ingest status=duplicate batch_id=%s", batch.batch_id)
+            return JSONResponse(status_code=200, content=content)
         log.info("operation=ingest status=stored batch_id=%s events=%d dropped=%d",
-                 batch.batch_id, len(batch.events), batch.dropped_since_last_sync)
-        return JSONResponse(status_code=202, content={"batch_id": str(batch.batch_id),
-                                                      "duplicate_batch": False, "accepted": len(batch.events)})
+                 batch.batch_id, result.accepted, batch.dropped_since_last_sync)
+        return JSONResponse(status_code=202, content=content)
+
+    @app.post("/v1/pipeline-runs")
+    def trigger_pipeline():
+        """Process every pending raw event now (development and simulator use)."""
+        try:
+            with connect() as conn:
+                conn.autocommit = True
+                summary = run_pipeline(conn, trigger_source="api")
+        except psycopg.Error as error:
+            log.error("operation=pipeline_trigger status=failed error=%s", type(error).__name__)
+            return _error(503, "storage_unavailable", "The pipeline could not reach the database.")
+        return JSONResponse(status_code=200, content=summary.as_dict())
 
     return app
 

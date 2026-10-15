@@ -173,7 +173,7 @@ Never sent in any event: media-response text, grammar notes, phrase or sentence 
 
 Allowed with care: target-language vocabulary terms appear inside `vocab_item_id` because the learner model needs per-word evidence. They stay in the local database and are **excluded from BI exports**, which aggregate to skill level (spec §28).
 
-## 7. Validation rules (implemented in Phase 4)
+## 7. Validation rules (implemented in Phase 4: `insights/polybot_insights/pipeline/validate.py`, tests in `test_validate.py`)
 
 A rule with severity **error** marks the raw row `invalid` and adds an `ops.validation_issues` row. A **warning** keeps the row valid and records the issue. Nothing is deleted (spec §12).
 
@@ -190,14 +190,15 @@ A rule with severity **error** marks the raw row `invalid` and adds an `ops.vali
 | `TIMESTAMP_IN_FUTURE` | error | `occurred_at` more than 5 minutes after `received_at` | `rows_invalid` |
 | `TIMESTAMP_TOO_OLD` | error | `occurred_at` before 2024-01-01 | `rows_invalid` |
 | `UNKNOWN_LANGUAGE` | error | `language` not in `core.languages` | `rows_invalid` |
-| `UNKNOWN_REFERENCE` | error | `lesson_id`, `recommendation_id`, or `decision_id` does not exist (learner-owned `phrase:` lessons and new `vocab_item_id`s are registered on first sight instead) | `rows_invalid` |
+| `UNKNOWN_REFERENCE` | error | `lesson_id`, `recommendation_id`, or `decision_id` does not exist, or a `pronunciation_scored` names a `client_attempt_ref` with no `pronunciation_attempted` (learner-owned `phrase:` and saved `media:` lessons, new `vocab_item_id`s and exercises are registered on first sight instead) | `rows_invalid` |
 | `VALUE_OUT_OF_RANGE` | error | a score, count, band, or duration is outside its documented range (e.g. accuracy > 100, `attempt_number` < 1, negative `response_time_ms`) | `rows_invalid` |
 | `INVALID_ENUM` | error | an enum field has an undocumented value | `rows_invalid` |
 | `INCONSISTENT_FIELDS` | error | logically impossible combination (e.g. `words_below_70` > `words_scored`; `from` = `to` in a status change) | `rows_invalid` |
 | `PAYLOAD_FORBIDDEN_FIELD` | error | a privacy-excluded key is present (§6) | `rows_invalid` |
 | `DUPLICATE_EVENT` | — | `event_id` already loaded | `rows_duplicate` (status `duplicate`) |
 | `RESPONSE_TIME_OUTLIER` | warning | `response_time_ms` > 10 minutes (likely the learner walked away) | — |
-| `NEAR_DUPLICATE` | warning | same learner, type, and context within 1 second (likely a double click) | — |
+| `NEAR_DUPLICATE` | warning | same learner, type, and context within 1 second (likely a double click) | `rows_with_warnings` |
+| `TRANSFORM_FAILED` | error | passed every rule above but the database still rejected it; the message names the constraint (ADR-022). Should never occur; each one is a bug to fix | `rows_invalid` |
 
 Accounting identity enforced by `ops.pipeline_runs`: `rows_processed = rows_valid + rows_invalid + rows_duplicate`.
 

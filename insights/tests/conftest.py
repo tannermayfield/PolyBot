@@ -18,6 +18,7 @@ import tempfile
 from pathlib import Path
 
 import psycopg
+import psycopg.conninfo
 import pytest
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
@@ -87,6 +88,50 @@ def migrated_url(database_url):
             conn.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema)))
         apply_migrations(conn)
     return database_url
+
+
+@pytest.fixture(scope="session")
+def pipeline_url(database_url):
+    """A second database with migrations and the real catalog, for tests that must commit
+    (the pipeline commits chunk by chunk). Kept apart from the rollback-only schema tests."""
+    if shutil.which("node") is None:
+        pytest.skip("Node is needed to export the catalog for pipeline tests.")
+    from polybot_insights.catalog import export_catalog, load_catalog
+
+    url = psycopg.conninfo.make_conninfo(database_url, dbname="polybot_pipeline_test")
+    with psycopg.connect(psycopg.conninfo.make_conninfo(database_url, dbname="postgres"), autocommit=True) as admin:
+        admin.execute("DROP DATABASE IF EXISTS polybot_pipeline_test")
+        admin.execute("CREATE DATABASE polybot_pipeline_test")
+    with psycopg.connect(url, autocommit=True) as conn:
+        apply_migrations(conn)
+        load_catalog(conn, export_catalog())
+    return url
+
+
+# Data written by ingest and the pipeline, children before parents. Catalog tables stay.
+DATA_TABLES = ("personalization.model_predictions", "personalization.recommendations", "personalization.decisions",
+               "analytics.inferred_preferences", "analytics.study_patterns", "analytics.skill_scores",
+               "analytics.learner_profiles", "core.explicit_preferences", "core.assessments", "core.attempts",
+               "core.sessions", "ops.validation_issues", "core.learner_events", "raw.events", "raw.event_batches")
+
+
+def reset_data(url: str) -> None:
+    with psycopg.connect(url, autocommit=True) as conn:
+        for table in DATA_TABLES:
+            conn.execute(f"DELETE FROM {table}")
+        conn.execute("DELETE FROM core.exercises")
+        conn.execute("DELETE FROM core.lessons WHERE owner_learner_id IS NOT NULL")
+        conn.execute("DELETE FROM core.learners")
+        conn.execute("DELETE FROM core.vocabulary_items WHERE difficulty_band IS NULL")
+        conn.execute("DELETE FROM ops.pipeline_runs")
+
+
+@pytest.fixture
+def pdb(pipeline_url):
+    """Autocommit connection to the pipeline database; data is cleared after each test."""
+    with psycopg.connect(pipeline_url, autocommit=True) as connection:
+        yield connection
+    reset_data(pipeline_url)
 
 
 @pytest.fixture

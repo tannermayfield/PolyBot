@@ -54,20 +54,20 @@
       if (lvl.level <= level) lvl.words.forEach(w => wordsToMark.add(w.toLowerCase()));
     });
 
-    let newlyMarked = 0;
-    let skippedLearning = 0;
-    wordsToMark.forEach(w => {
-      const current = vocabulary[w];
-      if (current === 'learning') { skippedLearning++; return; } // respect explicit choice
-      if (current !== 'known') newlyMarked++;
-      vocabulary[w] = 'known';
-    });
-
-    chrome.storage.local.set({ [KEYS.vocab]: vocabulary }, () => {
+    // The service worker applies the marks to the latest saved words, so words
+    // marked in another tab since this page opened are kept (ADR-019). It also
+    // respects any explicit "learning" choice and returns the real counts.
+    const changes = Object.fromEntries([...wordsToMark].map(w => [w, 'known']));
+    chrome.runtime.sendMessage({ type: 'VOCAB_UPDATE', lang: LANG, changes, keepLearning: true,
+      bulk: { frequency_level: level }, surface: 'catchup' }, (result) => {
+      if (chrome.runtime.lastError || !result?.ok) {
+        showToast('Your words could not be saved. Please try again.');
+        return;
+      }
       highestConfirmedLevel = level;
       render();
-      let msg = `✓ Marked ${newlyMarked} new word${newlyMarked === 1 ? '' : 's'} as known (Level ${level} and below)`;
-      if (skippedLearning > 0) msg += ` — kept ${skippedLearning} you'd already marked "learning"`;
+      let msg = `✓ Marked ${result.changed} new word${result.changed === 1 ? '' : 's'} as known (Level ${level} and below)`;
+      if (result.skippedLearning > 0) msg += ` — kept ${result.skippedLearning} you'd already marked "learning"`;
       showToast(msg);
     });
   }

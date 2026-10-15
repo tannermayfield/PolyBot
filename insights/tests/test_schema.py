@@ -292,6 +292,23 @@ def test_subskills_must_sit_under_their_parent(conn, seed):
                 name="Subjunctive", description="Mood for wishes and doubt.")
 
 
+def test_language_codes_match_the_extension_including_regions(conn, seed):
+    seed.language("zh-CN", "Chinese (Simplified)")
+    seed.insert("core.vocabulary_items", vocab_item_id="zh-CN:你好", language_code="zh-CN", term="你好")
+    for bad in ("ES", "zh-cn", "english", "zh_CN"):
+        with violates(conn, CheckViolation):
+            seed.language(bad, "Bad")
+
+
+def test_content_ids_allow_up_to_300_safe_characters(conn, seed):
+    seed.language()
+    seed.insert("core.courses", course_id="path:es", language_code="es", title="Spanish")
+    seed.insert("core.courses", course_id="x" * 300, language_code="es", title="Longest allowed")
+    for bad in ("x" * 301, "has space", "", "path/es"):
+        with violates(conn, CheckViolation):
+            seed.insert("core.courses", course_id=bad, language_code="es", title="Bad")
+
+
 def test_vocabulary_ids_are_language_plus_lower_case_term(conn, seed):
     seed.language()
     with violates(conn, CheckViolation):

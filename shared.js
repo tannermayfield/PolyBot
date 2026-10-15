@@ -263,8 +263,26 @@
       if (changes[storageKeys.vocab]) { vocabulary = changes[storageKeys.vocab].newValue || {}; reColor(); }
     });
 
-    function saveVocabulary() {
-      chrome.storage.local.set({ [storageKeys.vocab]: vocabulary });
+    // Only the words changed since the last save are sent; the service worker
+    // applies them to the freshest stored map, so other tabs' changes survive
+    // (ADR-019). If the worker is unreachable (e.g. the extension was just
+    // reloaded), fall back to the old whole-map write rather than lose the marks.
+    const pendingVocabChanges = new Map();
+    function setVocabStatus(term, status) {
+      const key = term.toLowerCase();
+      if (status) vocabulary[key] = status; else delete vocabulary[key];
+      pendingVocabChanges.set(key, status || null);
+    }
+    function saveVocabulary(method) {
+      if (!pendingVocabChanges.size) return;
+      const changes = Object.fromEntries(pendingVocabChanges);
+      pendingVocabChanges.clear();
+      const fallback = () => chrome.storage.local.set({ [storageKeys.vocab]: vocabulary });
+      try {
+        chrome.runtime.sendMessage({ type: 'VOCAB_UPDATE', lang: targetLang, changes, method, surface: 'page' }, result => {
+          if (chrome.runtime.lastError || !result?.ok) fallback();
+        });
+      } catch (_) { fallback(); }
     }
 
     // Sends a multi-word selection straight into the Build Phrases list
@@ -296,7 +314,14 @@
           savedAt: Date.now(),
         };
         chrome.storage.local.set({ [captureKeys.phrases]: [record, ...phrases] }, () => {
-          callback && callback(record.id, chrome.runtime.lastError?.message);
+          const error = chrome.runtime.lastError?.message;
+          if (!error) {
+            window.PolybotEvents?.record('phrase_captured', { surface: 'page', language: captureLang, payload: {
+              capture_source: /(^|\.)youtube\.com$/.test(location.hostname) ? 'video' : 'web',
+              has_audio: !!videoClipDataUrl,
+              word_count: Math.min(200, Math.max(1, String(targetText).trim().split(/\s+/).length)) } });
+          }
+          callback && callback(record.id, error);
         });
       });
     }
@@ -527,6 +552,16 @@
       return { total, known, learning, unknown, knownPct, learningPct, unknownPct };
     }
 
+    // ── Learner events (EVENT_TAXONOMY §3.3). Never includes the text itself. ──
+    function track(type, fields) {
+      window.PolybotEvents?.record(type, { surface: 'page', language: targetLang, ...fields });
+    }
+    function trackLookup(term, found) {
+      if (!term || term.length > 300) return;
+      track('word_looked_up', { context: { vocab_item_id: `${targetLang}:${term.toLowerCase()}` },
+        payload: { lookup_surface: 'page', direction: 'target_to_native', result: found ? 'translated' : 'unavailable' } });
+    }
+
     // ── Message helpers ───────────────────────────────────────────────────
     function translateWordInContext(sentence, word, occurrence) {
       return new Promise(resolve => {
@@ -538,6 +573,7 @@
         if (!clean || !sentence) { resolve(null); return; }
         chrome.runtime.sendMessage({ type: 'TRANSLATE_WORD_IN_CONTEXT', sentence, word: clean, occurrence: occurrence || 0, lang: targetLang, nativeLang }, r => {
           void chrome.runtime.lastError;
+          trackLookup(clean, !!r);
           resolve(r ?? null);
         });
       });
@@ -557,6 +593,7 @@
         if (!clean) { resolve(null); return; }
         chrome.runtime.sendMessage({ type: 'TRANSLATE_PHRASE_DIRECT', text: clean, lang: targetLang, nativeLang }, r => {
           void chrome.runtime.lastError;
+          trackLookup(clean, !!r);
           resolve(r ? { translation: r, start: null, end: null } : null);
         });
       });
@@ -608,6 +645,7 @@
             ranges: normRanges,
             savedAt: Date.now()
           });
+          track('definition_saved', { context: { vocab_item_id: `${targetLang}:${key}` }, payload: { has_context: !!sentence, is_custom: false } });
         }
         defs[key] = list;
         chrome.storage.local.set({ [storageKeys.defs]: defs });
@@ -626,6 +664,7 @@
           word, sentence, translation: clean, matched: clean,
           start: null, end: null, savedAt: Date.now(), custom: true
         });
+        track('definition_saved', { context: { vocab_item_id: `${targetLang}:${key}` }, payload: { has_context: !!sentence, is_custom: true } });
         defs[key] = list;
         chrome.storage.local.set({ [storageKeys.defs]: defs }, () => callback && callback(list));
       });
@@ -927,9 +966,9 @@
       quickPaintTouched.add(span);
       const key = word.toLowerCase();
       if (quickPaintMode === 'erase') {
-        if (vocabulary[key] === 'known') delete vocabulary[key];
+        if (vocabulary[key] === 'known') setVocabStatus(key, null);
       } else if (vocabulary[key] !== 'known') {
-        vocabulary[key] = 'known';
+        setVocabStatus(key, 'known');
       }
       span.className = `sptube-word ${statusClass(getWordStatus(word))} sptube-quick-marked`;
     }
@@ -972,7 +1011,7 @@
       quickPainting = false;
       quickPaintAnchor = null;
       quickPaintTouched = null;
-      saveVocabulary();
+      saveVocabulary('quick_mark');
       reColor(); // also clears the transient .sptube-quick-marked highlight and reapplies phrase overrides
       justFinishedDragSelection = true; // swallow the trailing synthetic click
       setTimeout(() => { justFinishedDragSelection = false; }, 60);
@@ -1298,12 +1337,8 @@
           ev.stopPropagation();
           const action = btn.dataset.action;
           const turningOn = getWordStatus(term) !== action;
-          if (getWordStatus(term) === action) {
-            delete vocabulary[term.toLowerCase()];
-          } else {
-            vocabulary[term.toLowerCase()] = action;
-          }
-          saveVocabulary();
+          setVocabStatus(term, getWordStatus(term) === action ? null : action);
+          saveVocabulary('page_click');
           if (turningOn && currentTranslation && currentTranslation.translation) {
             const ranges = currentTranslation.ranges || normalizeRanges(currentTranslation.start, currentTranslation.end);
             saveDefinition(term, sentence, currentTranslation.translation, ranges);

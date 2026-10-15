@@ -83,7 +83,7 @@ Every derived table also references `ops.pipeline_runs (run_id)`, so any number 
 ### core — dimensions
 | Table | Grain | Key points |
 |---|---|---|
-| `core.languages` | language | Synced from `languages.js` (ADR-015) |
+| `core.languages` | language | Synced from `languages.js` (ADR-015). Codes may carry a region (`zh-CN`), matching the extension |
 | `core.learners` | install | Random UUID; no name or email exists anywhere. `is_synthetic` labels simulator data (ADR-003) |
 | `core.skills` | skill or subskill | Self-referencing hierarchy. A CHECK forces `grammar.past-events` to sit under `grammar` |
 | `core.courses` | course | One "My Path" per language (`path:es`) |
@@ -151,6 +151,15 @@ Every derived table also references `ops.pipeline_runs (run_id)`, so any number 
 5. **Derived, not stored.** Strengths, weaknesses, accuracy rates, and revisit rates come from views (Phase 5) over facts, so two copies can never disagree.
 6. **`NULL` means "unknown", never zero.** `mastery_score` is `NULL` without objective evidence. A learner with no grammar attempts has an *unknown* grammar mastery, not a mastery of 0.
 7. **Foreign keys are not indexed automatically.** PostgreSQL indexes primary keys and unique constraints only. Indexes on FK columns are added deliberately where queries need them (§6).
+
+### 5.1 Phase 3 corrections to migration 001 (before its first real apply)
+
+Loading the real catalog exposed two constraints that could never have passed with real data. Both were fixed in place, which was still safe because 001 had only ever run on throwaway test clusters; each fix has a test.
+
+- `core.languages.language_code` allowed only `^[a-z]{2,3}$`, but the extension's Chinese is `zh-CN`. Every Chinese event would have failed as `UNKNOWN_LANGUAGE`. Now `^[a-z]{2,3}(-[A-Z]{2})?$`.
+- `core.content_id` used the regex `{1,300}`; PostgreSQL limits repetition counts to 255, so *every* lesson ID raised "invalid repetition count". The length is now a separate `length(VALUE) <= 300` check.
+
+From the first `python -m polybot_insights.db.migrate` against the real database onward, schema changes go in new numbered files only.
 
 ## 6. Indexes
 

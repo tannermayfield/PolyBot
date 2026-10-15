@@ -3,7 +3,7 @@
   "name": "Polybot — Language Learning",
   "version": "3.0.0",
   "description": "Build vocabulary, grammar, pronunciation, and media skills in a structured path. Save words and phrases from the web.",
-  "permissions": ["storage", "activeTab", "scripting", "unlimitedStorage"],
+  "permissions": ["storage", "activeTab", "scripting", "unlimitedStorage", "alarms"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://translate.googleapis.com/*",
@@ -19,7 +19,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],
-      "js": ["languages.js", "shared.js", "content.js"],
+      "js": ["languages.js", "insights-events.js", "shared.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }

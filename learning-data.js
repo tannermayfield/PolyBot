@@ -502,5 +502,7 @@
     return api;
   }
 
-  return Object.assign(createStore(), { createStore, STORAGE_KEY, LEVELS: Object.freeze([...LEVELS]) });
+  // CATALOG feeds scripts/export-catalog.cjs, which syncs content into the insights database (ADR-015).
+  const CATALOG = Object.freeze({ TOPICS, PROVIDED_MEDIA });
+  return Object.assign(createStore(), { createStore, STORAGE_KEY, LEVELS: Object.freeze([...LEVELS]), CATALOG });
 });

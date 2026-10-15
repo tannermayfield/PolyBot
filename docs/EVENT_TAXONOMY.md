@@ -36,7 +36,7 @@ The contract between the extension's event emitter (Phase 3) and the insights pi
 | `tz_offset_minutes` | integer | — | Local offset from UTC, −840…840. Used only for "preferred practice time" (spec §21) |
 | `surface` | enum | ✓ | `studio` \| `popup` \| `page` \| `catchup` \| `service` \| `simulator` |
 | `app_version` | string | ✓ | Extension `manifest.json` version |
-| `language` | string | conditional | Target language code; required for every event except `learner_registered`, `session_*`, and `recommendation_*` |
+| `language` | string | conditional | Target language code as `languages.js` writes it (ISO 639, optionally with a region: `zh-CN`); required for every event except `learner_registered`, `session_*`, and `recommendation_*` |
 | `context` | object | — | Only the keys in §2.3 |
 | `payload` | object | ✓ | Event-specific fields from §3 (may be `{}`) |
 
@@ -79,7 +79,7 @@ The contract between the extension's event emitter (Phase 3) and the insights pi
 
 | Event | Kind | Req. context | Payload | Feeds |
 |---|---|---|---|---|
-| `learner_registered` | system | — | `native_language`, `consent_version` | Creates the learner. Every other event from an unregistered learner is invalid |
+| `learner_registered` | system | — | `native_language`, `consent_version` | Creates the learner. Every other event from an unregistered learner is invalid. Emitted again whenever Insights is re-enabled (same `learner_id`); the pipeline treats repeats as an update, and the latest `consent_version` wins |
 | `session_started` | system | — | `entry_surface` | Sessions, consistency, preferred practice time |
 | `session_ended` | system | — | `reason`: `idle` \| `rotated`; `last_activity_at` | Session length (best-effort; the pipeline also derives sessions from event times) |
 
@@ -159,6 +159,10 @@ Added beyond the spec, each because a learner-model signal needs it: `learner_re
 - The buffer holds up to 5,000 events. On overflow the oldest are dropped and counted in `dropped_since_last_sync`.
 - Sync runs when the buffer reaches 50 events, 30 seconds after the last event, or immediately after `preference_set`. Failures back off exponentially (capped at 10 minutes).
 - Events are removed from the buffer only after a 2xx response. That is **at-least-once** delivery; the server deduplicates (`batch_id`, then `event_id`).
+- A retry reuses its `batch_id` only while every event of that batch is still buffered. If overflow dropped one of them, the retry gets a new `batch_id`, because the server would otherwise discard it as a duplicate and the new events in it would be lost.
+- A non-retryable `4xx` (anything but `408` and `429`) means the batch itself is unacceptable. Retrying it would block every later event, so it is dropped and its events are added to `dropped_since_last_sync`: loss is still reported, never silent.
+- Timers use `chrome.alarms` (the MV3 service worker sleeps, so `setTimeout` would be lost). Turning Insights off deletes undelivered events.
+- Implementation: `insights-events.js` (`record()` on every surface, `createHub()` in the service worker); tests in `tests/insights-events.test.cjs` and the cross-language contract test `insights/tests/test_client_contract.py`.
 
 ### 5.2 Sessions
 The service worker owns `session_id`. A new session begins when more than **30 minutes** have passed since the previous event; the worker then emits `session_ended` (reason `idle`, `last_activity_at` = previous event time) followed by `session_started`. No `beforeunload` handlers are needed.
@@ -203,21 +207,23 @@ Accounting identity enforced by `ops.pipeline_runs`: `rows_processed = rows_vali
 - Renaming, removing, or changing the meaning of a field: bump `schema_version`. The pipeline supports the current and previous version.
 - New event types: add to §3 and to `core.event_types` in a new migration; never edit an applied migration.
 
-## 9. Instrumentation map (Phase 3 plan)
+## 9. Instrumentation map (as built in Phase 3)
 
 | Event | Emitted from |
 |---|---|
-| `vocab_status_changed` | `shared.js` quick-mark (≈ line 930) and popup status actions (≈ line 1302) |
-| `vocab_bulk_marked` | `catchup.js` level marking (≈ line 63) |
-| `word_looked_up` | `shared.js` translation requests; `learning-data.js` `lookup()` |
-| `definition_saved` | `shared.js` `saveDefinition` / `saveCustomDefinition` |
-| `phrase_captured` | `shared.js` `saveToBuildPhrases`; `background.js` `saveStudioPhrase` |
-| `review_rated` | `studio.js` actions `rate-learning-word` (also fixes audit T4), `rate-card`, `rate-speaking` |
-| `pronunciation_attempted` / `_scored` | `studio.js` `finishRecording` / `assessAttempt` |
-| `feedback_viewed` | `studio.js` `compareTiming`; assessment detail |
-| `lesson_started` / `lesson_completed` | `studio.js` grammar and media open/complete actions |
-| `media_response_saved` | `studio.js` media response form submit |
-| `preference_set` | `personalization-method.js`, `personalization-interests.js`, `personalization-regions.js` save handlers; accent setting |
-| `answer_submitted`, `hint_requested`, `content_skipped` | new vocabulary recall exercise (ADR-004) |
-| `session_*`, `learner_registered` | `background.js` (service worker) |
+| `vocab_status_changed` | `vocab-writer.js` in the service worker, after applying a `VOCAB_UPDATE` from `shared.js` (popup click → `page_click`, drag → `quick_mark`). Emitted only for words whose status really changed, with the true `from` value read from storage (ADR-019) |
+| `vocab_bulk_marked` | `vocab-writer.js`, for `catchup.js` level marking: one event per action, counts computed from fresh storage |
+| `word_looked_up` | `shared.js` `translateWordInContext` / `translatePhraseDirect` (`page`); `studio.js` dictionary form (`dictionary`, with `result: saved` when the meaning came from the learner's own definitions) |
+| `definition_saved` | `shared.js` `saveDefinition` (only when not a duplicate) / `saveCustomDefinition` |
+| `phrase_captured` | `shared.js` `saveToBuildPhrases` (non-Spanish); `background.js` `saveStudioPhrase` (Spanish) |
+| `review_rated` | `studio.js` `rate-learning-word` in **every** language (audit T4, ADR-018), `rate-card`, `rate-speaking` |
+| `pronunciation_attempted` / `_scored` | `studio.js` `finishRecording` / `assessAttempt` (scores and word counts only; the transcript stays local) |
+| `feedback_viewed` | `studio.js` `compareTiming` (`timing_comparison`). `answer_explanation` and `assessment_detail` have no emitter yet |
+| `lesson_started` / `lesson_completed` | `studio.js` grammar and media open / mark-complete (`entry: navigation`, `completion: self_marked`) |
+| `media_response_saved` | `studio.js` media response form (one event per saved mode, length only) |
+| `preference_set` | `personalization-method.js` (one per changed key; `stated_via: quiz` after the quiz), `personalization-interests.js`, `personalization-regions.js`, `studio.js` accent selector |
+| `answer_submitted`, `hint_requested`, `content_skipped` | `vocab-recall.js` + `studio.js` Quick Recall (ADR-004, ADR-017). `content_skipped` uses `skip_button` and `closed_early`; `next_without_answer` has no emitter yet |
+| `session_*`, `learner_registered` | `insights-events.js` hub in the service worker |
 | `recommendation_*`, `difficulty_changed` | dashboard and recommendation surfaces (Phases 6–7) |
+
+Best effort, by design: leaving Quick Recall by switching page (instead of its close button) records no `content_skipped`.

@@ -21,7 +21,9 @@ from pathlib import Path
 
 import psycopg
 
-log = logging.getLogger("polybot_insights.migrate")
+from polybot_insights.config import load_env_file
+
+log =logging.getLogger("polybot_insights.migrate")
 
 MIGRATIONS_DIR = Path(__file__).with_name("migrations")
 
@@ -91,6 +93,7 @@ def apply_migrations(conn: psycopg.Connection, migrations: list[Migration] | Non
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_env_file()
     parser = argparse.ArgumentParser(description="Apply Polybot Insights database migrations.")
     parser.add_argument("--database-url", default=os.environ.get("POLYBOT_DATABASE_URL"),
                         help="PostgreSQL URL (default: $POLYBOT_DATABASE_URL)")

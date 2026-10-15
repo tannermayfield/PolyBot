@@ -9,23 +9,33 @@ function background(overrides = {}, environment = {}) {
   const phrases = [];
   const references = [];
   const tabs = [];
-  const context = {
-    URL, console, setTimeout, clearTimeout,
+  const stored = {};
+  const context = vm.createContext({
+    URL, console, setTimeout, clearTimeout, crypto,
     fetch: environment.fetch,
-    importScripts: name => assert.equal(name, 'study-data.js'),
+    importScripts: (...names) => {
+      assert.deepEqual(names, ['study-data.js', 'insights-events.js', 'languages.js', 'vocab-writer.js']);
+      for (const name of names.slice(1)) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', name), 'utf8'), context);
+    },
     chrome: {
-      runtime: { onMessage: { addListener: fn => listeners.push(fn) }, getURL: file => 'chrome-extension://test/' + file },
+      runtime: { id: 'test', onMessage: { addListener: fn => listeners.push(fn) }, getURL: file => 'chrome-extension://test/' + file, getManifest: () => ({ version: '3.0.0' }) },
       ...(environment.detectLanguage ? { i18n: { detectLanguage: environment.detectLanguage } } : {}),
       tabs: { create: async tab => { tabs.push(tab); } },
-      scripting: {}, storage: {}
+      alarms: { create() {}, clear() {}, onAlarm: { addListener() {} } },
+      scripting: {},
+      storage: { local: {
+        get: async keys => structuredClone(Object.fromEntries(keys.filter(k => k in stored).map(k => [k, stored[k]]))),
+        set: async items => { Object.assign(stored, structuredClone(items)); }
+      } }
     },
     StudioData: {
       savePhrase: async phrase => { const result = { ...phrase, id: 'phrase-1' }; phrases.push(result); return result; },
       addReference: async (id, ref) => { references.push({ id, ...ref }); }, ...overrides
     }
-  };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8'), context);
-  return { phrases, references, tabs, send: (msg, sender = { url: 'https://example.com/article#selection' }) => new Promise(resolve => listeners[0](msg, sender, resolve)) };
+  });
+  context.self = context;
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8'), context);
+  return { phrases, references, tabs, stored, context, send: (msg, sender = { url: 'https://example.com/article#selection' }) => new Promise(resolve => listeners[0](msg, sender, resolve)) };
 }
 
 function translationEnvironment(detectLanguage) {
@@ -119,4 +129,23 @@ test('automatic dictionary lookup safely falls back when detection is invalid or
   assert.equal(missingResult.detection, 'fallback');
   assert.equal(missingResult.sourceLang, 'es');
   assert.equal(missingResult.targetLang, 'en');
+});
+
+test('Insights settings messages are refused from web pages; events flow once enabled from the studio', async () => {
+  const bg = background();
+  const plain = value => JSON.parse(JSON.stringify(value));
+  const studio = { id: 'test', url: 'chrome-extension://test/studio.html' };
+  const page = { id: 'test', url: 'https://example.com/article' };
+  assert.deepEqual(plain(await bg.send({ type: 'INSIGHTS_ENABLE', nativeLanguage: 'en' }, page)), { ok: false });
+  const event = bg.context.PolybotEvents.stamp('definition_saved', { surface: 'page', language: 'es', context: { vocab_item_id: 'es:casa' }, payload: { has_context: true, is_custom: false } });
+  assert.deepEqual(plain(await bg.send({ type: 'RECORD_EVENT', event }, page)), { ok: false, reason: 'disabled' });
+  const enabled = await bg.send({ type: 'INSIGHTS_ENABLE', nativeLanguage: 'en' }, studio);
+  assert.equal(enabled.ok, true);
+  assert.deepEqual(plain(await bg.send({ type: 'RECORD_EVENT', event }, page)), { ok: true });
+  const buffer = bg.stored[bg.context.PolybotEvents.BUFFER_KEY];
+  assert.deepEqual(plain(buffer.map(e => e.event_type)), ['learner_registered', 'session_started', 'definition_saved']);
+  assert.equal(buffer[2].learner_id, enabled.result.learnerId);
+  const bad = { ...event, event_id: 'x', payload: { text: 'hola' } };
+  assert.equal((await bg.send({ type: 'RECORD_EVENT', event: bad }, page)).reason, 'invalid');
+  assert.equal(bg.stored[bg.context.PolybotEvents.BUFFER_KEY].length, 3);
 });

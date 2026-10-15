@@ -20,7 +20,8 @@ CREATE SCHEMA IF NOT EXISTS ops;
 -- A domain is a reusable type + constraint, so "a ratio is 0..1" is written once.
 CREATE DOMAIN core.ratio AS numeric(4,3) CHECK (VALUE BETWEEN 0 AND 1);
 CREATE DOMAIN core.difficulty_band AS smallint CHECK (VALUE BETWEEN 1 AND 5);
-CREATE DOMAIN core.content_id AS text CHECK (VALUE ~ '^[A-Za-z0-9:._-]{1,300}$');
+-- Length is checked separately: PostgreSQL regex repetition counts stop at 255.
+CREATE DOMAIN core.content_id AS text CHECK (VALUE ~ '^[A-Za-z0-9:._-]+$' AND length(VALUE) <= 300);
 
 -- ─── ops: pipeline runs (referenced by nearly everything) ──────────────────
 CREATE TABLE ops.pipeline_runs (
@@ -76,7 +77,8 @@ COMMENT ON TABLE raw.events IS 'Every event exactly as received. Invalid rows st
 
 -- ─── core dimensions ───────────────────────────────────────────────────────
 CREATE TABLE core.languages (
-  language_code  text    PRIMARY KEY CHECK (language_code ~ '^[a-z]{2,3}$'),
+  -- Codes as languages.js uses them: ISO 639 plus an optional region ('zh-CN').
+  language_code  text    PRIMARY KEY CHECK (language_code ~ '^[a-z]{2,3}(-[A-Z]{2})?$'),
   name           text    NOT NULL,
   is_rtl         boolean NOT NULL DEFAULT false
 );

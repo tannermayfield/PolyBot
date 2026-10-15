@@ -93,3 +93,27 @@ Each entry records a decision, why it was made, and what it costs. Entries are n
 
 ## ADR-015 — Catalog ownership
 **Decision.** Content defined in extension JavaScript (languages, grammar topics, provided media, interests/topics, Spanish frequency bands) is **synced** into `core` by a catalog export script (Phase 3), so JavaScript stays the single source of truth. Taxonomies the analytics system owns (skills, event types, preference definitions, rule catalog) are **seeded by migrations**. A Phase 3 test asserts that every grammar topic in `learning-data.js` has a matching `grammar.<slug>` skill.
+
+## ADR-016 — Insights opt-in: settings toggle with a consent notice
+**Decision.** Insights is **off by default**. Turning it on happens only from a toggle in settings. The toggle first shows a short plain-language notice: what is recorded, that data goes only to the local Polybot Insights service on this computer, and that free text, URLs and audio are never sent. Only after the learner confirms does the extension request loopback host permission (from that user gesture) and create the learner. The notice is `consent_version` **1**; any wording change bumps the version, and `learner_registered` records it.
+**Rejected.** A first-run prompt (more intrusive and pressures consent) and a bare toggle (no informed consent). Chosen by the owner, 2026-10-15.
+
+## ADR-017 — Vocabulary recall lives in the review area and needs 4+ words
+**Decision.** The ADR-004 recall exercise is a "Quick recall" mode next to the existing review. It unlocks for a language once that language has **at least 4 saved words with meanings**, so every question can show 4 choices drawn from the learner's own words. Until then the mode explains how many more words are needed. Chosen by the owner, 2026-10-15.
+
+## ADR-018 — Non-Spanish meaning reviews: emit events, schedule later
+**Decision.** Fix audit T4 by making `rate-learning-word` record a `review_rated` event for every language. A spaced-repetition schedule for non-Spanish languages is **not** built in Phase 3; Phase 5's learner model will supply review need from these events. Spanish keeps its existing schedule. Chosen by the owner, 2026-10-15.
+**Why.** Keeps Phase 3 scoped to tracking, and lets the schedule later come from measured evidence rather than a second hand-built scheduler.
+
+## ADR-019 — Fix the vocabulary lost-update race (audit T3) during instrumentation
+**Decision.** `shared.js` and `catchup.js` read the whole vocabulary map, change it, and write it back. Two writes that overlap can silently erase one another; worse, `catchup.js` never listened for changes, so saving a level wrote back a copy from when the page opened. Phase 3 instruments the same functions, so the owner chose to fix it now (2026-10-15).
+**How.** Pages now send only the words they changed (`VOCAB_UPDATE`); the service worker (`vocab-writer.js`) applies them to the freshest stored map one request at a time, then records `vocab_status_changed` / `vocab_bulk_marked` with the true previous status. If the worker cannot be reached, `shared.js` falls back to its old whole-map write rather than lose the learner's marks. `tests/vocab-writer.test.cjs` proves overlapping updates survive, and fails when the queue is removed.
+**Rejected.** `navigator.locks`: locks are per origin, and content scripts run in the page's origin (youtube.com), so they could never coordinate with extension pages.
+
+## ADR-020 — Insights settings live in their own storage key
+**Decision.** The opt-in state, service address and consent version are stored in `polybotInsights` (with worker state in `polybotInsightsState` and the queue in `polybotEventBuffer`), not inside the studio settings object.
+**Why.** Studio state includes recorded audio; the service worker would otherwise load megabytes on every event just to learn whether tracking is on.
+
+## ADR-021 — Personalization preferences: synchronous facade over chrome.storage.local
+**Decision.** ADR-006's move of `polybotMethod`, `polybotInterests` and `polybotRegion` to `chrome.storage.local` is done through `prefs-store.js`: it loads the three keys once at studio start (moving any older `localStorage` copies, and deleting those only after the new write succeeds) and then serves a `localStorage`-shaped `getItem` / `setItem`. A failed write restores the previous value and the page shows its existing error.
+**Why.** The three pages read preferences synchronously while rendering; making them asynchronous would rewrite all three and their tests for no learner-visible gain. In localhost preview the facade is plain `localStorage`.

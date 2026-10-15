@@ -6,7 +6,7 @@ Tracks progress through the adaptive-learning phases. Update at the end of every
 |---|---|---|---|
 | 1 Audit | **Done** (2026-10-15) | [ADAPTIVE_SYSTEM_AUDIT.md](ADAPTIVE_SYSTEM_AUDIT.md) | No code changed. Baseline: 88/88 tests, `npm run check` passing on the uncommitted rename working tree |
 | 2 Data architecture | **Done** (2026-10-15) | [DECISIONS.md](DECISIONS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [EVENT_TAXONOMY.md](EVENT_TAXONOMY.md), [DATA_MODEL.md](DATA_MODEL.md), migrations `001`–`002`, `insights/tests/test_schema.py` (39 passing on a temporary PostgreSQL 18 cluster) | Rename committed as `ed1cd8c`. `core.learner_events` indexes chosen from EXPLAIN measurements on 500k synthetic events (DATA_MODEL §6.1). Preference-storage move deferred to Phase 3 (ADR-006) |
-| 3 Event tracking | Not started | — | Includes first gradable exercise (vocabulary recall) |
+| 3 Event tracking | **Built** (2026-10-15), awaiting owner check in the installed extension | `insights-events.js`, `vocab-writer.js`, `prefs-store.js`, `vocab-recall.js`, `insights/polybot_insights/api/`, `catalog.py`, `scripts/export-catalog.cjs`; ADR-016–021. JS 123/123, `npm run check` passing; Python 63/63 (incl. a contract test running the real JS emitter against the real API into PostgreSQL); Quick Recall checked in headless Chrome (preview, French) | Real `polybot` database not yet created (owner step: insights/README.md §3–6). Fixed two migration-001 constraints before first real apply (DATA_MODEL §5.1). Existing `scripts/*-smoke.cjs` wait for `.home-path`, which the current home page no longer has: they fail on the previous commit too |
 | 4 Data pipeline | Not started | — | |
 | 5 Learner model | Not started | — | |
 | 6 Rule-based personalization | Not started | — | |
@@ -18,7 +18,7 @@ Tracks progress through the adaptive-learning phases. Update at the end of every
 ## Environment baseline (2026-10-15)
 
 - Node 24.19.0 (project requires ≥ 22)
-- Python 3.12 with scikit-learn, pandas, openpyxl, pytest. Project virtualenv `insights/.venv` adds psycopg 3.3 and pytest 9.1. Still needed later: FastAPI/uvicorn (Phase 3), boto3 (Phase 10)
+- Python 3.12 with scikit-learn, pandas, openpyxl, pytest. Project virtualenv `insights/.venv` adds psycopg 3.3, pytest 9.1, FastAPI 0.143, uvicorn 0.54 and httpx 0.28. Still needed later: boto3 (Phase 10)
 - PostgreSQL 18.6 running as `postgresql-x64-18`; `psql` at `C:\Program Files\PostgreSQL\18\bin` (not on `PATH`)
 - No Docker, no AWS CLI
 

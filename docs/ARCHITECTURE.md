@@ -77,12 +77,12 @@ sequenceDiagram
   A-->>S: "Prioritizing past-tense grammar because…"
 ```
 
-## 4. Planned HTTP API (insights service)
+## 4. HTTP API (insights service)
 
 | Method & path | Phase | Purpose |
 |---|---|---|
-| `GET /health` | 3 | Liveness plus database reachability (no learner data) |
-| `POST /v1/event-batches` | 3 | Ingest ≤ 500 events / ≤ 1 MB. Idempotent by `batch_id`: a repeated batch returns 200 with `duplicate_batch: true` |
+| `GET /health` | 3 ✓ | Liveness plus database reachability (no learner data) |
+| `POST /v1/event-batches` | 3 ✓ | Ingest ≤ 500 events / ≤ 1 MB. Idempotent by `batch_id` (`INSERT … ON CONFLICT DO NOTHING`): a repeated batch returns 200 with `duplicate_batch: true`; a new one 202. Unknown top-level fields → 422. A request whose `Origin` is not in `POLYBOT_ALLOWED_ORIGINS` is refused with 403 before any write (CORS alone would only hide the reply). No `Origin` (curl, simulator) is allowed: it is loopback-only |
 | `POST /v1/pipeline-runs` | 4 | Trigger an incremental run (development and simulator use). Returns the `ops.pipeline_runs` row |
 | `GET /v1/learners/{learner_id}/model?language=` | 5 | Skill scores, profile, study patterns, explicit and inferred preferences (with confidence labels) |
 | `GET /v1/learners/{learner_id}/decisions?language=` | 6 | Active decisions with reason, adaptation text, source metrics, and recommendations |
@@ -123,13 +123,21 @@ Preference changes are **not** a separate write endpoint. They travel as `prefer
 
 ```
 /                       Chrome extension (Load unpacked here; no "_" names at this level, ADR-012)
-├── *.js, *.html, *.css existing extension
+├── *.js, *.html, *.css existing extension, plus (Phase 3):
+│   ├── insights-events.js  event stamping on every surface + the service-worker hub (buffer, sessions, sync)
+│   ├── vocab-writer.js     single writer of vocabulary maps in the service worker (ADR-019)
+│   ├── prefs-store.js      personalization preferences in chrome.storage.local (ADR-021)
+│   └── vocab-recall.js     Quick Recall question logic (ADR-004, ADR-017)
+├── scripts/export-catalog.cjs  extension content → catalog JSON (ADR-015)
 ├── server/             existing Node assessment bridge
 ├── docs/               specification, decisions, architecture, data model, taxonomy
 └── insights/           Python project (ADR-012)
     ├── pyproject.toml
     ├── .env.example
     ├── polybot_insights/
+    │   ├── config.py               settings from the environment and insights/.env
+    │   ├── catalog.py              loads the exported catalog into core.* (upsert, never delete)
+    │   ├── api/app.py              FastAPI ingest service (python -m polybot_insights.api)
     │   └── db/
     │       ├── migrate.py          applies numbered SQL migrations, records them in ops.schema_migrations
     │       └── migrations/
@@ -137,10 +145,13 @@ Preference changes are **not** a separate write endpoint. They travel as `prefer
     │           └── 002_reference_data.sql
     └── tests/
         ├── conftest.py             temporary PostgreSQL cluster fixture (ADR-013)
-        └── test_schema.py          constraint and integrity tests
+        ├── test_schema.py          constraint and integrity tests
+        ├── test_api.py             ingest API
+        ├── test_catalog.py         catalog sync
+        └── test_client_contract.py the real JS emitter against the real API over HTTP
 ```
 
-Later phases add `polybot_insights/api/`, `pipeline/`, `personalization/`, `ml/`, `exports/`, and `simulator/` beside `db/`.
+Later phases add `pipeline/`, `personalization/`, `ml/`, `exports/`, and `simulator/` beside `db/`.
 
 ## 9. Technology choices
 

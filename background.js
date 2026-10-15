@@ -9,9 +9,58 @@
 const cache = {};
 const DEFAULT_LANG = 'es';
 const DEFAULT_NATIVE_LANG = 'en';
-importScripts('study-data.js');
+importScripts('study-data.js', 'insights-events.js', 'languages.js', 'vocab-writer.js');
+
+// ── Polybot Insights: the only writer of the learner event buffer (ADR-011).
+const PolybotEventHub = self.PolybotEventHub = PolybotEvents.createHub({
+  storage: { get: keys => chrome.storage.local.get(keys), set: items => chrome.storage.local.set(items) },
+  fetch: (url, init) => fetch(url, init),
+  alarms: { create: (name, info) => chrome.alarms.create(name, info), clear: name => chrome.alarms.clear(name) },
+  appVersion: chrome.runtime.getManifest().version
+});
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === PolybotEvents.SYNC_ALARM) PolybotEventHub.sync().catch(() => {});
+});
+// Records an event that the worker itself observed on a surface's behalf.
+function recordFromWorker(type, fields) {
+  try { return PolybotEventHub.record(PolybotEvents.stamp(type, fields)).catch(() => {}); }
+  catch (error) { console.warn('[Polybot Insights]', error.message); return Promise.resolve(); }
+}
+// The only writer of vocabulary status maps (ADR-019).
+const VocabWriter = PolybotVocabWriter.createVocabWriter({
+  storage: { get: keys => chrome.storage.local.get(keys), set: items => chrome.storage.local.set(items) },
+  keyFor: lang => SPTubeLang.storageKeys(lang).vocab,
+  record: recordFromWorker
+});
+// Enabling, disabling and status are settings actions: extension pages only.
+const fromExtensionPage = sender => sender.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''));
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+
+  if (msg.type === 'RECORD_EVENT') {
+    PolybotEventHub.record(msg.event)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ ok: false, reason: 'invalid', error: error.message }));
+    return true;
+  }
+
+  if (msg.type === 'VOCAB_UPDATE') {
+    if (_sender.id !== chrome.runtime.id) { sendResponse({ ok: false }); return false; }
+    VocabWriter.update(msg)
+      .then(result => sendResponse({ ok: true, ...result }))
+      .catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (msg.type === 'INSIGHTS_ENABLE' || msg.type === 'INSIGHTS_DISABLE' || msg.type === 'INSIGHTS_STATUS' || msg.type === 'INSIGHTS_SYNC_NOW') {
+    if (!fromExtensionPage(_sender)) { sendResponse({ ok: false }); return false; }
+    const task = msg.type === 'INSIGHTS_ENABLE' ? PolybotEventHub.enable({ nativeLanguage: validLanguageCode(msg.nativeLanguage) || DEFAULT_NATIVE_LANG, url: msg.url })
+      : msg.type === 'INSIGHTS_DISABLE' ? PolybotEventHub.disable()
+      : msg.type === 'INSIGHTS_SYNC_NOW' ? PolybotEventHub.sync()
+      : PolybotEventHub.status();
+    task.then(result => sendResponse({ ok: true, result })).catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
 
   if (msg.type === 'SAVE_STUDIO_PHRASE') {
     saveStudioPhrase(msg, _sender)
@@ -130,6 +179,9 @@ async function saveStudioPhrase(msg, sender) {
     if (/^https?:$/.test(url.protocol)) { url.hash = ''; sourceUrl = url.href; }
   } catch (_) { /* Source attribution is optional. */ }
   const phrase = await StudioData.savePhrase({ text, translation, source: audio ? 'video' : 'web', sourceUrl });
+  recordFromWorker('phrase_captured', { surface: 'page', language: 'es', payload: {
+    capture_source: audio ? 'video' : 'web', has_audio: Boolean(audio),
+    word_count: Math.min(200, Math.max(1, text.split(/\s+/).length)) } });
   if (audio) {
     try {
       await StudioData.addReference(phrase.id, { label: 'Original clip', kind: 'original', audioUrl: audio, createdAt: Date.now() });
@@ -153,7 +205,7 @@ async function registerReaderScript(hostname, originPattern) {
   const config = {
     id,
     matches: [originPattern],
-    js: ['languages.js', 'shared.js', 'reader.js', 'videocc.js'],
+    js: ['languages.js', 'insights-events.js', 'shared.js', 'reader.js', 'videocc.js'],
     css: ['styles.css'],
     runAt: 'document_idle',
     persistAcrossSessions: true,

@@ -49,7 +49,10 @@ const languages = () => window.SPTubeLang?.LANGUAGES || [];
 const languageOptions = selected => languages().map(item => `<option value="${esc(item.code)}"${item.code === selected ? ' selected' : ''}>${esc(item.name)}</option>`).join('');
 const targetLang = () => learning?.target || {code:'es',name:'Spanish',speechLang:'es-ES',rtl:false};
 const nativeLang = () => learning?.native || {code:'en',name:'English',speechLang:'en-US',rtl:false};
-const targetLanguages = () => learning?.targetLanguages?.length ? learning.targetLanguages : [targetLang()];
+// Learner events (EVENT_TAXONOMY §3). Facts only: never the learner's text, audio or transcripts.
+const track = (type, fields = {}) => window.PolybotEvents?.record(type, {surface:'studio', language:targetLang().code, ...fields});
+const vocabItemId = (word, code = targetLang().code) => `${code}:${String(word).trim().toLowerCase()}`;
+const targetLanguages = () =>learning?.targetLanguages?.length ? learning.targetLanguages : [targetLang()];
 const isSpanish = () => targetLang().code === 'es';
 const languageByCode = code => [targetLang(),nativeLang()].find(item => item.code === code) || {code,name:code || 'Language',rtl:false};
 function resolveRoute(value) {
@@ -114,6 +117,12 @@ async function mutate(callback,message,paint = true) {
   try { const result = await callback(); [state,learning] = await Promise.all([D.load(),loadLearning()]); window.StudioTheme?.apply(state.settings.theme || 'system'); if(message) notify(message); return result; }
   finally {operation = false; paint ? render() : shell();}
 }
+// Self-marked completion is self-report, never demonstrated mastery (EVENT_TAXONOMY §3.2).
+async function completeLesson(id,message) {
+  let completed = false;
+  await mutateLearning(async () => { await L.completeActivity(id); completed = true; },message);
+  if(completed) track('lesson_completed',{context:{lesson_id:id},payload:{completion:'self_marked'}});
+}
 async function mutateLearning(callback,message) {
   if(!L) throw new Error('Learning data is unavailable. Reload the extension and try again.');
   if(operation) return; operation = true;
@@ -160,7 +169,33 @@ function renderDictionaryResult() {
   const translation = result.translation || result.meaning || result.definition, source = languageByCode(result.sourceLang || targetLang().code), destination = languageByCode(result.targetLang || nativeLang().code);
   return `<div><p class="eyebrow">${esc(source.name)} → ${esc(destination.name)}</p><h2 dir="${source.rtl ? 'rtl' : 'ltr'}">${esc(result.term || '')}</h2><p class="flashcard-meaning" dir="${destination.rtl ? 'rtl' : 'ltr'}">${esc(translation || 'No saved meaning yet.')}</p>${result.source === 'saved' ? '<span class="badge">Saved vocabulary</span>' : '<span class="badge outline">Translation result</span>'}</div>`;
 }
+// ── Quick recall (ADR-004, ADR-017): logic in vocab-recall.js, events here.
+const R = window.VocabRecall;
+function newRecallQuestion() {
+  ui.recall = R?.buildQuestion(learning?.vocabulary || [],{language:targetLang().code,avoidId:ui.recall?.wordId}) || null;
+}
+function leaveRecall(how) {
+  const q = ui.recall, reason = R?.skipReason(q,how);
+  if(reason) track('content_skipped',{context:{exercise_id:q.exerciseId,vocab_item_id:q.vocabItemId},payload:{reason}});
+}
+function renderRecall() {
+  const close = `<button class="icon-button" data-action="close-vocab-practice" aria-label="Close quick recall">${icon('close')}</button>`;
+  const status = R ? R.readiness(learning?.vocabulary) : {ready:false,needed:R?.MIN_WORDS || 4};
+  if(!status.ready) return `<section class="card practice-panel"><div class="section-head"><div><p class="eyebrow">QUICK RECALL</p><h2>Almost ready.</h2></div>${close}</div>${empty(`Save ${status.needed} more ${status.needed === 1 ? 'word' : 'words'} with meanings.`,`Quick recall builds four choices from your own ${esc(targetLang().name)} words, so it needs at least ${R?.MIN_WORDS || 4} saved words that have meanings.`)}</section>`;
+  if(!ui.recall || !ui.recall.vocabItemId.startsWith(`${targetLang().code}:`)) newRecallQuestion();
+  const q = ui.recall, forward = q.direction === 'forward', dir = targetLang().rtl ? 'rtl' : 'ltr';
+  const choiceDir = forward ? 'auto' : dir;
+  const feedback = q.solved ? (q.attempts === 1 ? 'Correct on the first try.' : 'Correct.') : q.attempts ? 'Not quite. Try another choice.' : '';
+  const choices = q.choices.filter(c => !q.eliminated.includes(c.id)).map(c => {
+    const picked = q.picked.includes(c.id), state = picked ? (c.correct ? ' is-correct' : ' is-wrong') : (q.solved && c.correct ? ' is-correct' : '');
+    return `<button class="recall-choice${state}" data-action="recall-answer" data-id="${esc(c.id)}" dir="${choiceDir}"${picked || q.solved ? ' disabled' : ''}>${esc(c.label)}</button>`;
+  }).join('');
+  const controls = q.solved ? btn('recall-next','Next word',null,'primary')
+    : `${btn('recall-hint','Remove a wrong choice',null,'small')}${btn('recall-skip','Skip',null,'small')}`;
+  return `<section class="card practice-panel recall-panel"><div class="section-head"><div><p class="eyebrow">QUICK RECALL · ${forward ? 'CHOOSE THE MEANING' : 'CHOOSE THE WORD'}</p><h2 dir="${forward ? dir : 'auto'}">${esc(q.prompt)}</h2></div>${close}</div><div class="recall-choices">${choices}</div><p class="recall-feedback" role="status" aria-live="polite">${esc(feedback)}</p><div class="flex-row">${controls}</div></section>`;
+}
 function renderVocabularyPractice() {
+  if(ui.vocabPractice === 'recall') return renderRecall();
   const words = learning?.vocabulary || [], item = words.find(word => word.id === ui.reviewId) || words.find(word => word.meaning) || words[0];
   if(ui.vocabPractice === 'list') return '';
   if(!item) return `<section class="card practice-panel">${empty('Save a word to begin.','Words captured with the extension will appear here for practice.')}</section>`;
@@ -172,7 +207,7 @@ function renderVocabulary() {
   if(ui.resourceView === 'words') return back('Vocabulary') + renderVocabularyDetail();
   if(ui.resourceView === 'lists') return back('Vocabulary') + renderVocabularyLists();
   if(ui.resourceView === 'dictionary') return back('Vocabulary') + renderDictionary();
-  return `<div class="hub-page vocabulary-home">${hubHeading('Choose a vocabulary tool.','Look something up, organize saved words, or start a focused recall session.','VOCABULARY')}<div class="feature-grid hub-grid" data-count="5">${feature('resource-view','Dictionary',`Search ${esc(nativeLang().name)} and ${esc(targetLang().name)}.`,`search`,'data-view="dictionary"')}${feature('resource-view','All My Words',`${learning.vocabulary.length} saved words in one place.`,'library','data-view="words"')}${feature('resource-view','My Vocab Lists','Browse your Learning and Known lists.','cards','data-view="lists"')}${feature('vocab-practice','Meaning Cards','Recall a word, then check its meaning.','cards','data-mode="meaning"')}${feature('vocab-practice','Listening Cards','Hear a word and practice recognition.','headphones','data-mode="listening"')}</div></div>`;
+  return `<div class="hub-page vocabulary-home">${hubHeading('Choose a vocabulary tool.','Look something up, organize saved words, or start a focused recall session.','VOCABULARY')}<div class="feature-grid hub-grid" data-count="6">${feature('vocab-practice','Quick Recall',R?.readiness(learning.vocabulary).ready ? 'Pick the right meaning from four of your own words.' : `Unlocks with ${R?.MIN_WORDS || 4} saved words that have meanings.`,'check','data-mode="recall"')}${feature('resource-view','Dictionary',`Search ${esc(nativeLang().name)} and ${esc(targetLang().name)}.`,`search`,'data-view="dictionary"')}${feature('resource-view','All My Words',`${learning.vocabulary.length} saved words in one place.`,'library','data-view="words"')}${feature('resource-view','My Vocab Lists','Browse your Learning and Known lists.','cards','data-view="lists"')}${feature('vocab-practice','Meaning Cards','Recall a word, then check its meaning.','cards','data-mode="meaning"')}${feature('vocab-practice','Listening Cards','Hear a word and practice recognition.','headphones','data-mode="listening"')}</div></div>`;
 }
 function renderDictionary() { return `<section class="card dictionary-card"><div class="dictionary-heading"><div><p class="eyebrow">BILINGUAL DICTIONARY</p><h2>${esc(nativeLang().name)} ↔ ${esc(targetLang().name)}</h2><p>Enter either language. The dictionary recognizes the direction automatically.</p></div></div><form id="dictionary-form" class="dictionary-form"><label class="sr-only" for="dictionary-term">Word or short phrase in ${esc(nativeLang().name)} or ${esc(targetLang().name)}</label><input id="dictionary-term" name="term" required maxlength="200" placeholder="Search in ${esc(nativeLang().name)} or ${esc(targetLang().name)}…"><button class="button primary" type="submit">${icon('search')}Look up</button></form><div id="dictionary-result" class="dictionary-result" role="status">${renderDictionaryResult()}</div></section>`; }
 function renderWordRows(words,emptyTitle,emptyText) {
@@ -335,7 +370,50 @@ function targetLanguagePicker() {
 }
 function settingsDialog() {
   const theme = state.settings.theme || 'system';
-  dialog('Language learning settings',`<section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('globe')}</span><div><h3>Your languages</h3><p>Choose what you are learning and how the studio should explain it.</p></div></div><div class="field"><label for="target-language">Study now</label><select id="target-language">${languageOptions(targetLang().code)}</select><small>This is the language currently shown throughout the app.</small></div><div class="field"><span class="field-label">Your target languages</span><p class="section-description">Choose the languages available in your quick switcher.</p>${targetLanguagePicker()}</div><div class="field"><label for="native-language">Show meanings in</label><select id="native-language">${languageOptions(nativeLang().code)}</select></div></section><section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('settings')}</span><div><h3>Appearance</h3><p>Keep the studio comfortable wherever you study.</p></div></div><div class="field"><label for="settings-theme">Color theme</label><select id="settings-theme"><option value="system"${theme === 'system' ? ' selected' : ''}>Use device setting</option><option value="light"${theme === 'light' ? ' selected' : ''}>Light</option><option value="dark"${theme === 'dark' ? ' selected' : ''}>Dark</option></select><small>Applies across every page and follows your device when set to automatic.</small></div></section><section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('wave')}</span><div><h3>Optional pronunciation assessment</h3><p>Connect a local speech service for word-level feedback.</p></div></div><p class="section-description">Audio leaves this device only after you explicitly choose “Assess pronunciation.”</p><label class="check-row"><input id="assessment-enabled" type="checkbox"${state.settings.assessmentEnabled ? ' checked' : ''}>Enable assessment through my configured speech service</label><div class="field row-gap"><label for="assessment-url">Assessment service address</label><input id="assessment-url" type="url" required value="${esc(state.settings.assessmentUrl)}"><small>The local bridge supports configured es-MX and es-ES assessment. Other regions remain available for shadowing.</small></div><p class="reference-help">Run the assessment bridge with your speech account credentials; keys stay outside the extension. Setup instructions are in server/README.md.</p></section><section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('download')}</span><div><h3>Your saved practice</h3><p>Back up recordings, references, phrases, and review history.</p></div></div><p class="section-description">Everything stays on this device unless you export a studio backup.</p><div class="flex-row">${btn('export-backup','Export backup','download','small')}${btn('import-backup','Import backup','upload','small')}</div></section>`,'<button type="submit" class="button primary">Save settings</button>','settings-form');
+  dialog('Language learning settings',`<section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('globe')}</span><div><h3>Your languages</h3><p>Choose what you are learning and how the studio should explain it.</p></div></div><div class="field"><label for="target-language">Study now</label><select id="target-language">${languageOptions(targetLang().code)}</select><small>This is the language currently shown throughout the app.</small></div><div class="field"><span class="field-label">Your target languages</span><p class="section-description">Choose the languages available in your quick switcher.</p>${targetLanguagePicker()}</div><div class="field"><label for="native-language">Show meanings in</label><select id="native-language">${languageOptions(nativeLang().code)}</select></div></section><section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('settings')}</span><div><h3>Appearance</h3><p>Keep the studio comfortable wherever you study.</p></div></div><div class="field"><label for="settings-theme">Color theme</label><select id="settings-theme"><option value="system"${theme === 'system' ? ' selected' : ''}>Use device setting</option><option value="light"${theme === 'light' ? ' selected' : ''}>Light</option><option value="dark"${theme === 'dark' ? ' selected' : ''}>Dark</option></select><small>Applies across every page and follows your device when set to automatic.</small></div></section><section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('wave')}</span><div><h3>Optional pronunciation assessment</h3><p>Connect a local speech service for word-level feedback.</p></div></div><p class="section-description">Audio leaves this device only after you explicitly choose “Assess pronunciation.”</p><label class="check-row"><input id="assessment-enabled" type="checkbox"${state.settings.assessmentEnabled ? ' checked' : ''}>Enable assessment through my configured speech service</label><div class="field row-gap"><label for="assessment-url">Assessment service address</label><input id="assessment-url" type="url" required value="${esc(state.settings.assessmentUrl)}"><small>The local bridge supports configured es-MX and es-ES assessment. Other regions remain available for shadowing.</small></div><p class="reference-help">Run the assessment bridge with your speech account credentials; keys stay outside the extension. Setup instructions are in server/README.md.</p></section>${insightsSection()}<section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('download')}</span><div><h3>Your saved practice</h3><p>Back up recordings, references, phrases, and review history.</p></div></div><p class="section-description">Everything stays on this device unless you export a studio backup.</p><div class="flex-row">${btn('export-backup','Export backup','download','small')}${btn('import-backup','Import backup','upload','small')}</div></section>`,'<button type="submit" class="button primary">Save settings</button>','settings-form');
+  refreshInsightsStatus();
+}
+// ── Polybot Insights opt-in (ADR-016). Off by default; the notice below is consent version 1.
+// Changing its wording means bumping PolybotEvents.CONSENT_VERSION.
+const insightsAvailable = () => Boolean(window.chrome?.runtime?.id && window.PolybotEvents);
+function runtimeMessage(type,extra = {}) {
+  return new Promise((resolve,reject) => chrome.runtime.sendMessage({type,...extra},response => {
+    const error = chrome.runtime.lastError;
+    if(error || !response?.ok) reject(new Error(error?.message || response?.error || 'Polybot Insights did not respond. Reload the extension and try again.')); else resolve(response.result);
+  }));
+}
+function insightsSection() {
+  const status = ui.insightsStatus, enabled = Boolean(status?.enabled);
+  const url = status?.url || window.PolybotEvents?.DEFAULT_URL || 'http://127.0.0.1:17495';
+  return `<section class="settings-section"><div class="settings-section-heading"><span class="settings-section-icon">${icon('settings')}</span><div><h3>Optional: Polybot Insights</h3><p>Let a service on this computer learn from how you practice.</p></div></div><div class="insights-consent"><p>When this is on, Polybot records learning events: the words you look up, save or mark, how you rate reviews, your recall answers and how long they took, the lessons you open or complete, and the preferences you set. They are sent only to the Polybot Insights service at the address below on this computer.</p><p><strong>Never sent:</strong> anything you type (responses, notes, phrases, translations), page addresses or titles, recordings, or transcripts.</p><p>Turning this off deletes events that have not been sent yet. Events already received stay in your local Insights database.</p></div><label class="check-row"><input id="insights-enabled" type="checkbox"${enabled ? ' checked' : ''}${insightsAvailable() ? '' : ' disabled'}>I have read this and want Polybot Insights on</label><div class="field row-gap"><label for="insights-url">Insights service address</label><input id="insights-url" type="url" required value="${esc(url)}"${insightsAvailable() ? '' : ' disabled'}><small>Start the service with <code>python -m polybot_insights.api</code> (see insights/README.md).</small></div><p class="reference-help" id="insights-status" role="status">${esc(insightsStatusText(status))}</p></section>`;
+}
+function insightsStatusText(status) {
+  if(!insightsAvailable()) return 'Available in the installed extension only.';
+  if(!status) return 'Checking Insights status…';
+  if(!status.enabled) return 'Off. Nothing is recorded.';
+  const synced = status.lastSyncAt ? `last delivered ${when(Date.parse(status.lastSyncAt))}` : 'nothing delivered yet';
+  return `On · ${status.buffered} waiting to send · ${synced}${status.lastError ? ` · ${status.lastError}` : ''}${status.dropped ? ` · ${status.dropped} not delivered` : ''}`;
+}
+async function refreshInsightsStatus() {
+  if(!insightsAvailable()) return;
+  try { ui.insightsStatus = await runtimeMessage('INSIGHTS_STATUS'); } catch (_) { ui.insightsStatus = null; }
+  const line = $('#insights-status'), box = $('#insights-enabled');
+  if(line) line.textContent = insightsStatusText(ui.insightsStatus);
+  if(box && ui.insightsStatus) box.checked = Boolean(ui.insightsStatus.enabled);
+}
+function readInsightsForm(form) {
+  const box = $('#insights-enabled',form); if(!box || box.disabled) return null;
+  const url = new URL($('#insights-url',form).value.trim());
+  if(url.username || url.password || !['http:','https:'].includes(url.protocol) || !['localhost','127.0.0.1','[::1]'].includes(url.hostname)) throw new Error('Polybot Insights must run on this computer: use a localhost or 127.0.0.1 address.');
+  return {enabled:box.checked,url:url.origin,wasEnabled:Boolean(ui.insightsStatus?.enabled),previousUrl:ui.insightsStatus?.url};
+}
+async function applyInsights(choice,permission) {
+  if(!choice) return;
+  if(choice.enabled && (!choice.wasEnabled || choice.url !== choice.previousUrl)) {
+    if(!await permission) throw new Error('Allow access to your Insights service address to turn on Polybot Insights.');
+    await runtimeMessage('INSIGHTS_ENABLE',{nativeLanguage:nativeLang().code,url:choice.url});
+  } else if(!choice.enabled && choice.wasEnabled) await runtimeMessage('INSIGHTS_DISABLE');
+  await refreshInsightsStatus();
 }
 function voiceSettingsDialog() { dialog('Spanish voices and accents',renderVoices()); }
 function readSettingsForm(form) {
@@ -493,6 +571,8 @@ async function finishRecording(recorded) {
     if(!recorded?.audioUrl || !(recorded.duration > 0)) throw new Error('No audio was captured. Check your microphone and try again.');
     const saved = await D.saveAttempt({...snapshot,audioUrl:recorded.audioUrl,duration:recorded.duration,createdAt:Date.now()});
     ui.attemptId = saved.id; ui.comparison = null; if(snapshot.mode === 'test') p.testAttemptId = saved.id;
+    const segment = snapshot.referenceSnapshot ? ((snapshot.referenceSnapshot.start || 0) > 0 || Boolean(snapshot.referenceSnapshot.end)) : false;
+    track('pronunciation_attempted',{language:'es',context:{lesson_id:`phrase:${snapshot.phraseId}`},payload:{client_attempt_ref:saved.id,mode:snapshot.mode === 'test' ? 'test' : 'practice',duration_ms:Math.round(recorded.duration * 1000),accent:snapshot.accentId,has_reference:Boolean(snapshot.referenceId),is_segment:segment}});
     state = await D.load(); notify('Your attempt is saved. Listen back and choose one thing to improve.');
   } finally {recordingSnapshot = null; finalizingRecording = false; p.saving = false; p.recorder = null; render();}
 }
@@ -538,6 +618,9 @@ async function assessAttempt(id) {
     const current = (await D.load()).attempts.find(item => item.id === id);
     if(!current) throw new Error('This recording was removed before its assessment finished.');
     await D.saveAttempt({...current,assessment}); state = await D.load(); notify('Assessment saved with this attempt.');
+    // Scores only: the transcript and per-word text stay on this device.
+    const scored = (assessment.words || []).filter(w => Number.isFinite(w.accuracy));
+    track('pronunciation_scored',{language:'es',context:{lesson_id:`phrase:${current.phraseId}`},payload:{client_attempt_ref:id,provider:'azure',locale:assessment.locale,accuracy:assessment.accuracy ?? null,fluency:assessment.fluency ?? null,completeness:assessment.completeness ?? null,words_scored:scored.length,words_below_70:scored.filter(w => w.accuracy < 70).length}});
   } finally {ui.assessments.delete(id); if(!busy()) render();}
 }
 async function compareTiming(id) {
@@ -552,6 +635,7 @@ async function compareTiming(id) {
       else data = await A.compare(snap.audioUrl,attempt.audioUrl);
     } else data = await A.analyze(attempt.audioUrl);
     ui.comparison = {attemptId:id,data,segmentDuration};
+    track('feedback_viewed',{language:'es',context:{lesson_id:`phrase:${attempt.phraseId}`},payload:{feedback_type:'timing_comparison'}});
   } catch(error) {ui.comparison = {attemptId:id,error:error.message};}
   finally {operation = false; render();}
 }
@@ -572,23 +656,39 @@ async function action(name,node) {
     case 'resource-view': ui.resourceView = node.dataset.view; render(); return featureFocus();
     case 'open-listening': go('media'); ui.resourceView = 'listening'; render(); return featureFocus();
     case 'speak-sample': return speak(`This is a browser voice sample for ${targetLang().name}.`);
-    case 'vocab-practice': ui.resourceView = 'practice'; ui.vocabPractice = node.dataset.mode || 'meaning'; ui.revealed = false; ui.reviewId = null; return render();
-    case 'close-vocab-practice': ui.resourceView = 'home'; ui.vocabPractice = 'list'; ui.revealed = false; return render();
+    case 'vocab-practice': ui.resourceView = 'practice'; ui.vocabPractice = node.dataset.mode || 'meaning'; ui.revealed = false; ui.reviewId = null; if(ui.vocabPractice === 'recall') newRecallQuestion(); return render();
+    case 'recall-answer': {
+      const result = ui.recall && R.answer(ui.recall,id,Date.now()); if(!result) return;
+      ui.recall = result.question;
+      track('answer_submitted',{context:{exercise_id:result.question.exerciseId,vocab_item_id:result.question.vocabItemId},payload:result.payload});
+      return render();
+    }
+    case 'recall-hint': {
+      if(!ui.recall) return; const before = ui.recall.hintsUsed; ui.recall = R.useHint(ui.recall);
+      if(ui.recall.hintsUsed > before) track('hint_requested',{context:{exercise_id:ui.recall.exerciseId,vocab_item_id:ui.recall.vocabItemId},payload:{hint_type:'eliminate_choice'}});
+      return render();
+    }
+    case 'recall-skip': leaveRecall('skip'); newRecallQuestion(); return render();
+    case 'recall-next': newRecallQuestion(); render(); return $('.recall-choice')?.focus();
+    case 'close-vocab-practice': if(ui.vocabPractice === 'recall') { leaveRecall('close'); ui.recall = null; } ui.resourceView = 'home'; ui.vocabPractice = 'list'; ui.revealed = false; return render();
     case 'reveal-learning-word': ui.revealed = true; return render();
     case 'speak-learning-word': {const word = learning.vocabulary.find(item => item.id === id); if(word) return speak(word.word); return;}
     case 'rate-learning-word': {
       const words = learning.vocabulary.filter(word => word.meaning); const index = Math.max(0,words.findIndex(word => word.id === id));
+      // Audit T4: ratings in every language now leave evidence, not just Spanish (ADR-018).
+      const rated = learning.vocabulary.find(item => item.id === id);
+      if(rated) track('review_rated',{context:{vocab_item_id:vocabItemId(rated.word)},payload:{review_kind:ui.vocabPractice === 'listening' ? 'listening' : 'meaning',rating:node.dataset.rating}});
       if(isSpanish()) { const studioWord = state.vocabulary.find(word => word.id === id || word.word === learning.vocabulary.find(item => item.id === id)?.word); if(studioWord) await D.rateReview('meaning',studioWord.id,node.dataset.rating); }
       ui.reviewId = words.length > 1 ? words[(index + 1) % words.length].id : id; ui.revealed = false; notify(isSpanish() ? 'Meaning review scheduled. Here is the next word.' : 'Here is the next word.'); return render();
     }
-    case 'open-grammar-practice': ui.grammarTopic = id; render(); return featureFocus();
+    case 'open-grammar-practice': ui.grammarTopic = id; track('lesson_started',{context:{lesson_id:id},payload:{entry:'navigation'}}); render(); return featureFocus();
     case 'close-grammar-practice': ui.grammarTopic = null; return render();
-    case 'complete-grammar': return mutateLearning(() => L.completeActivity(id),'Grammar practice marked complete.');
-    case 'open-media': { const item = learning.media.find(entry => entry.id === id); if(!item || (item.origin === 'provided' && item.experience === 'carefree')) return; ui.mediaResponse = id; render(); return setTimeout(() => $('#media-response-form textarea')?.focus(),0); }
+    case 'complete-grammar': return completeLesson(id,'Grammar practice marked complete.');
+    case 'open-media': { const item = learning.media.find(entry => entry.id === id); if(!item || (item.origin === 'provided' && item.experience === 'carefree')) return; ui.mediaResponse = id; track('lesson_started',{context:{lesson_id:id},payload:{entry:'navigation'}}); render(); return setTimeout(() => $('#media-response-form textarea')?.focus(),0); }
     case 'close-media-response': ui.mediaResponse = null; return render();
     case 'speak-media': {const item = learning.media.find(entry => entry.id === id); if(item) return speak(item.text); return;}
     case 'play-media-audio': {const item = learning.media.find(entry => entry.id === id); if(item?.audioUrl) return playUrl(item.audioUrl,0,0,'media'); return;}
-    case 'complete-media': return mutateLearning(() => L.completeActivity(id),'Media activity marked complete.');
+    case 'complete-media': return completeLesson(id,'Media activity marked complete.');
     case 'new-phrase': return phraseDialog();
     case 'edit-phrase': return phraseDialog(id);
     case 'open-settings': return settingsDialog();
@@ -641,7 +741,10 @@ async function action(name,node) {
     case 'rate-speaking': {
       const attempt = state.attempts.find(a => a.id === id); if(!attempt) return;
       if(attempt.selfRating) return notify('This attempt is already rated. Record another attempt to review again.');
-      return mutate(async () => {await D.saveAttempt({...attempt,selfRating:node.dataset.rating}); await D.rateReview('speaking',attempt.phraseId,node.dataset.rating);},'Speaking review scheduled.');
+      let rated = false;
+      await mutate(async () => {await D.saveAttempt({...attempt,selfRating:node.dataset.rating}); await D.rateReview('speaking',attempt.phraseId,node.dataset.rating); rated = true;},'Speaking review scheduled.');
+      if(rated) track('review_rated',{language:'es',context:{lesson_id:`phrase:${attempt.phraseId}`},payload:{review_kind:'speaking',rating:node.dataset.rating,client_attempt_ref:attempt.id}});
+      return;
     }
     case 'save-profile': {
       const index = Number(node.dataset.index), profile = ui.profiles[index]; if(!profile) return;
@@ -657,7 +760,10 @@ async function action(name,node) {
     case 'speak-card': {const word = state.vocabulary.find(w => w.id === id); if(word) return speak(word.word); return;}
     case 'rate-card': {
       if(!ui.revealed || ui.reviewed.has(id)) return;
-      await mutate(() => D.rateReview('meaning',id,node.dataset.rating),null,false);
+      let rated = false;
+      await mutate(async () => { await D.rateReview('meaning',id,node.dataset.rating); rated = true; },null,false);
+      const card = state.vocabulary.find(w => w.id === id);
+      if(rated && card) track('review_rated',{language:'es',context:{vocab_item_id:vocabItemId(card.word,'es')},payload:{review_kind:ui.reviewKind === 'listening' ? 'listening' : 'meaning',rating:node.dataset.rating}});
       ui.reviewed.add(id); ui.reviewId = null; ui.revealed = false; stopAudio(); return render();
     }
     case 'export-backup': return exportBackup();
@@ -670,7 +776,11 @@ async function submit(form) {
     if(!L?.lookup) throw new Error('Dictionary lookup is unavailable. Reload the extension and try again.');
     const term = $('#dictionary-term').value.trim(); if(!term) throw new Error('Enter a word or short phrase to look up.');
     operation = true; const button = form.querySelector('button'); button.disabled = true;
-    try { ui.dictionaryResult = await L.lookup(term); learning = await L.load(); }
+    try {
+      ui.dictionaryResult = await L.lookup(term); learning = await L.load();
+      const r = ui.dictionaryResult, toNative = !r?.sourceLang || r.sourceLang === targetLang().code;
+      if(term.length <= 300) track('word_looked_up',{...(toNative ? {context:{vocab_item_id:vocabItemId(term)}} : {}),payload:{lookup_surface:'dictionary',direction:toNative ? 'target_to_native' : 'native_to_target',result:r?.status === 'found' ? (r.source === 'saved' ? 'saved' : 'translated') : 'unavailable'}});
+    }
     finally { operation = false; render(); }
     return;
   }
@@ -679,10 +789,14 @@ async function submit(form) {
     const mediaItem = learning.media.find(item => item.id === itemId);
     if(!mediaItem || (mediaItem.origin === 'provided' && mediaItem.experience === 'carefree')) throw new Error('This media item does not accept responses.');
     if(!writing && !speaking) throw new Error('Write a response or add a reflection after speaking aloud.');
-    return mutateLearning(async () => {
-      if(writing) await L.saveMediaResponse({itemId,mode:'writing',text:writing});
-      if(speaking) await L.saveMediaResponse({itemId,mode:'speaking',text:speaking});
+    const saved = [];
+    await mutateLearning(async () => {
+      if(writing) { await L.saveMediaResponse({itemId,mode:'writing',text:writing}); saved.push(['writing',writing.length]); }
+      if(speaking) { await L.saveMediaResponse({itemId,mode:'speaking',text:speaking}); saved.push(['speaking_reflection',speaking.length]); }
     },'Your media responses were saved.');
+    // The response text is never sent, only its length (EVENT_TAXONOMY §3.4).
+    for(const [mode,chars] of saved) track('media_response_saved',{context:{lesson_id:itemId},payload:{mode,response_chars:chars}});
+    return;
   }
   if(form.id === 'voice-connect-form') {
     const baseUrl = $('#voicebox-url').value.trim(), permission = A.requestAccess(baseUrl);
@@ -738,9 +852,12 @@ async function submit(form) {
   }
   if(form.id === 'settings-form') {
     if(!L?.setLanguages) throw new Error('Language profiles are unavailable. Reload the extension and try again.');
+    // Ask for loopback access now, while the click still counts as a user gesture.
+    const insights = readInsightsForm(form);
+    const permission = insights?.enabled && (!insights.wasEnabled || insights.url !== insights.previousUrl) ? A.requestAccess(insights.url) : null;
     operation = true;
     try {
-      await persistSettingsForm(form); $('#editor-dialog').close(); notify('Language learning settings saved.');
+      await persistSettingsForm(form); await applyInsights(insights,permission); $('#editor-dialog').close(); notify('Language learning settings saved.');
     } finally { operation = false; render(); }
     return;
   }
@@ -785,7 +902,12 @@ document.addEventListener('change',event => {
         } finally { operation = false; render(); }
         return;
       }
-      case 'global-accent': stopAudio(); return mutate(() => D.saveSettings({accentId:node.value}),`${accent(node.value).label} selected.`);
+      case 'global-accent': {
+        stopAudio(); const previous = state.settings.accentId; let changed = false;
+        await mutate(async () => { await D.saveSettings({accentId:node.value}); changed = true; },`${accent(node.value).label} selected.`);
+        if(changed && previous !== node.value) track('preference_set',{language:'es',payload:{preference_key:'accent',value:node.value,stated_via:'settings',...(previous ? {previous_value:previous} : {})}});
+        return;
+      }
       case 'library-source': ui.source = node.value; return render();
       case 'practice-phrase': initPhrase(node.value); return render();
       case 'practice-reference': stopAudio(); metadataToken++; Object.assign(p,{referenceId:node.value || null,start:0,end:0,duration:0,text:phrase().text,confirmed:false}); return render();
@@ -810,6 +932,8 @@ async function boot() {
   $$('[data-icon]').forEach(node => {node.innerHTML = icon(node.dataset.icon);});
   if(!D || !A) throw new Error('Studio files are missing. Reload the extension with study-data.js and study-audio.js included.');
   state = await D.init();
+  // Personalization pages read preferences synchronously, so load them before the first render.
+  try { await window.PolybotPrefs?.hydrate(); } catch (error) { console.warn('[Polybot] Preferences could not be loaded:', error?.message); }
   if(L?.recordVocabularySnapshot) await L.recordVocabularySnapshot();
   learning = await loadLearning(); window.StudioTheme?.apply(state.settings.theme || 'system');
   const initialRoute = resolveRoute(location.hash.slice(1)); page = initialRoute[0]; if(initialRoute[1]) ui.pronunciationTab = initialRoute[1];

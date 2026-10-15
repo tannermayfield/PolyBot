@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = 'polybotInterests';
   const LIMIT = 10;
+  const store = () => window.PolybotPrefs || window.localStorage;
   const CATEGORIES = [
     ['Food & drink', 'Cooking', 'Baking', 'Coffee & tea', 'Restaurants', 'Street food', 'Vegetarian food', 'Wine & drinks', 'Food traditions'],
     ['Travel & places', 'City breaks', 'Road trips', 'Backpacking', 'Beaches', 'Architecture', 'Local culture', 'Travel planning', 'Museums'],
@@ -46,7 +47,7 @@
     let storageIssue = '';
     const status = page.querySelector('[data-interest-save-status]');
     try {
-      const raw = (window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(STORAGE_KEY.replace('polybot', 'giftOfTongues')));
+      const raw = (store().getItem(STORAGE_KEY) ?? store().getItem(STORAGE_KEY.replace('polybot', 'giftOfTongues')));
       if (raw) {
         const saved = JSON.parse(raw);
         if (saved?.version !== 1 || !Array.isArray(saved.selected)) throw new Error('Invalid interests');
@@ -86,8 +87,14 @@
     }
     function save(next) {
       try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, selected: [...next] }));
+        const previous = [...selected];
+        store().setItem(STORAGE_KEY, JSON.stringify({ version: 1, selected: [...next] }), () => {
+          selected = new Set(previous);
+          updateSelection();
+          announce('Could not save your changes. Your previous selection is unchanged. Please try again.', true);
+        });
         selected = next;
+        if (previous.join() !== [...next].join()) window.PolybotEvents?.record('preference_set', { language: ctx.target?.code, payload: { preference_key: 'interests', value: [...next], stated_via: 'settings', previous_value: previous } });
         updateSelection();
         announce(selected.size === LIMIT ? 'All 10 spots filled. Remove an interest to choose another.' : 'Preferences saved on this device.');
       } catch (_) {
@@ -131,5 +138,5 @@
     if (storageIssue) announce(storageIssue, true);
   }
 
-  window.PersonalizationInterests = { render, mount };
+  window.PersonalizationInterests = { render, mount, CATEGORIES };
 })();

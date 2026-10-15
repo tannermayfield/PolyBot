@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict';
 
-  const STORAGE_KEY = 'giftOfTonguesLearning';
+  const STORAGE_KEY = 'polybotLearning';
   const TARGET_KEY = 'sptubeTargetLang';
   const NATIVE_KEY = 'sptubeNativeLang';
   const MAX_RESPONSES = 500;
@@ -320,7 +320,17 @@
   }
 
   function createStore(options = {}) {
-    const storage = options.storage || browserStorage();
+    const backend = options.storage || browserStorage();
+    // Read pre-Polybot data when no value exists under the current key.
+    const legacyKey = STORAGE_KEY.replace('polybot', 'giftOfTongues');
+    const storage = Object.assign({}, backend, {
+      async get(keys) {
+        const values = await backend.get(keys.includes(STORAGE_KEY) ? [...keys, legacyKey] : keys);
+        if (!Object.prototype.hasOwnProperty.call(values, STORAGE_KEY) &&
+            Object.prototype.hasOwnProperty.call(values, legacyKey)) values[STORAGE_KEY] = values[legacyKey];
+        return values;
+      }
+    });
     const lang = languageApi(options);
     const now = options.now || Date.now;
     const runtime = own(options, 'runtime') ? options.runtime : root.chrome && root.chrome.runtime;

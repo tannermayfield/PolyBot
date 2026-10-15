@@ -54,7 +54,7 @@ async function selectCaptionPhrase(page) {
 
 async function main() {
   const tempRoot = fs.realpathSync(os.tmpdir());
-  const profile = fs.mkdtempSync(path.join(tempRoot, 'gift-of-tongues-extension-'));
+  const profile = fs.mkdtempSync(path.join(tempRoot, 'polybot-extension-'));
   let context;
   const checked = [];
   const errors = [];
@@ -232,7 +232,7 @@ async function main() {
     if (context) await context.close();
     const resolvedProfile = path.resolve(profile);
     // Verify this exact mkdtemp-created target stays within the named temporary directory.
-    if (path.dirname(resolvedProfile) !== path.resolve(tempRoot) || !path.basename(resolvedProfile).startsWith('gift-of-tongues-extension-')) {
+    if (path.dirname(resolvedProfile) !== path.resolve(tempRoot) || !path.basename(resolvedProfile).startsWith('polybot-extension-')) {
       throw new Error('Refusing to remove a profile outside the smoke-test temporary directory.');
     }
     fs.rmSync(resolvedProfile, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });

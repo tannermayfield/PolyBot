@@ -1,4 +1,4 @@
-// Gift of Tongues Video Captions — click-to-learn on any <video> with subtitles,
+// Polybot Video Captions — click-to-learn on any <video> with subtitles,
 // on any site the user has turned Reading Mode on for (see popup.js).
 //
 // A plain HTML5 <video> with a <track kind="subtitles"|"captions"> renders

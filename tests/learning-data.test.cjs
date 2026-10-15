@@ -88,7 +88,7 @@ test('vocabulary mastery snapshots are real, deduplicated, and language-scoped',
   const first = await api.recordVocabularySnapshot();
   assert.deepEqual(first, { targetCode: 'fr', known: 1, total: 3, recordedAt: NOW + 1 });
   await api.recordVocabularySnapshot();
-  assert.equal(storage.values.giftOfTonguesLearning.vocabularyMasterySnapshots.length, 1, 'unchanged mastery must not invent another point');
+  assert.equal(storage.values.polybotLearning.vocabularyMasterySnapshots.length, 1, 'unchanged mastery must not invent another point');
   storage.values.sptubeVocabulary_fr.Bonjour = 'known';
   const second = await api.recordVocabularySnapshot();
   assert.deepEqual(second, { targetCode: 'fr', known: 2, total: 3, recordedAt: NOW + 3 });
@@ -121,7 +121,7 @@ test('target language choices persist and always include the active language', a
   const { api, storage } = fixture({ sptubeTargetLang: 'es', sptubeNativeLang: 'en' });
   const state = await api.setLanguages('fr', 'en', ['es', 'ja', 'es']);
   assert.deepEqual(state.targetLanguages.map(item => item.code), ['fr', 'es', 'ja']);
-  assert.deepEqual(storage.values.giftOfTonguesLearning.targetLanguages, ['fr', 'es', 'ja']);
+  assert.deepEqual(storage.values.polybotLearning.targetLanguages, ['fr', 'es', 'ja']);
   const switched = await api.setLanguages('ja', 'en', state.targetLanguages.map(item => item.code));
   assert.deepEqual(switched.targetLanguages.map(item => item.code), ['ja', 'fr', 'es']);
   await assert.rejects(api.setLanguages('fr', 'en', ['xx']), /supported target languages/);
@@ -168,7 +168,7 @@ test('grammar practice and My Path progress are recorded only after explicit com
   let state = await api.load();
   const topic = state.grammarTopics.find(item => item.level === 'A1');
   assert.equal(state.path[0].progress.completed, 0);
-  assert.deepEqual(storage.values.giftOfTonguesLearning, undefined);
+  assert.deepEqual(storage.values.polybotLearning, undefined);
   const completion = await api.completeActivity(topic.id);
   assert.deepEqual(completion, { id: topic.id, completedAt: NOW });
   state = await api.load();
@@ -186,7 +186,7 @@ test('grammar practice and My Path progress are recorded only after explicit com
 test('Spanish keeps legacy grammar completion while new progress remains language-scoped', async () => {
   const { api } = fixture({
     sptubeTargetLang: 'es', sptubeNativeLang: 'en',
-    giftOfTonguesLearning: {version:1,mediaResponses:[],targetLanguages:[],completedActivities:{'grammar:A1:word-order':NOW}}
+    polybotLearning: {version:1,mediaResponses:[],targetLanguages:[],completedActivities:{'grammar:A1:word-order':NOW}}
   });
   const spanish = await api.load();
   assert.equal(spanish.grammarTopics.find(item => item.title === 'Basic word order').completed, true);
@@ -205,7 +205,7 @@ test('writing and speaking reflections are bounded, update in place, and require
   const item = (await api.load()).media[0];
   assert.equal(item.responses.writing.text, 'Revised response');
   assert.equal(item.responses.speaking.text, 'I practiced this aloud.');
-  assert.equal(storage.values.giftOfTonguesLearning.mediaResponses.length, 2);
+  assert.equal(storage.values.polybotLearning.mediaResponses.length, 2);
   assert.deepEqual(storage.values.sptubePhrases_fr, frenchData().sptubePhrases_fr);
   await assert.rejects(api.saveMediaResponse({ itemId, mode: 'drawing', text: 'x' }), /writing or speaking/);
   await assert.rejects(api.saveMediaResponse({ itemId: 'media:fr:missing', mode: 'writing', text: 'x' }), /unavailable/);
@@ -253,7 +253,7 @@ test('malformed legacy data is ignored safely and unsafe inputs never pollute pr
     sptubeTargetLang: 'fr', sptubeNativeLang: 'en', sptubeVocabulary_fr: hostile,
     sptubeDefinitions_fr: { bonjour: [{ matched: 'hello' }, null, { matched: '' }] },
     sptubePhrases_fr: [{ savedTranslation: 3 }, null],
-    giftOfTonguesLearning: JSON.parse('{"completedActivities":{"__proto__":4,"grammar:fr:A1:word-order":' + NOW + '}}')
+    polybotLearning: JSON.parse('{"completedActivities":{"__proto__":4,"grammar:fr:A1:word-order":' + NOW + '}}')
   });
   const state = await api.load();
   assert.equal(state.vocabulary[0].meaning, 'hello');
@@ -301,7 +301,7 @@ test('browser global works with callback-based chrome.storage.local', async () =
   const translated = await vm.runInContext('LearningData.lookup("fromage")', context);
   assert.equal(translated.translation, 'cheese');
   await vm.runInContext('LearningData.completeActivity("grammar:fr:A1:word-order")', context);
-  assert.equal(values.giftOfTonguesLearning.completedActivities['grammar:fr:A1:word-order'] > 0, true);
+  assert.equal(values.polybotLearning.completedActivities['grammar:fr:A1:word-order'] > 0, true);
 });
 
 test('localhost preview uses localStorage and returns an unavailable live lookup', async () => {

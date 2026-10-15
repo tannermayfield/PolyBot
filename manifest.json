@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Gift of Tongues — Language Learning",
+  "name": "Polybot — Language Learning",
   "version": "3.0.0",
   "description": "Build vocabulary, grammar, pronunciation, and media skills in a structured path. Save words and phrases from the web.",
   "permissions": ["storage", "activeTab", "scripting", "unlimitedStorage"],

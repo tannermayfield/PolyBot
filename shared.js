@@ -1,4 +1,4 @@
-// Gift of Tongues Shared Engine
+// Polybot Shared Engine
 // Site-agnostic core: tokenizing text into clickable word spans, the
 // click/hover definition popups, drag-to-select phrases, translation
 // requests, and vocabulary/definition storage. Both content.js (YouTube)

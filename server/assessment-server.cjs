@@ -190,7 +190,7 @@ function createHandler(config = readConfig(), { fetchImpl = fetch } = {}) {
       if (origin && !config.origins.has(origin)) throw new ServiceError(403, 'Origin is not allowed. Add the exact studio origin to ALLOWED_ORIGINS on the server.');
       if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
       if (req.method === 'GET' && req.url === '/health') {
-        return respond(200, { service: 'gift-of-tongues-assessment', configured: Boolean(config.key && config.endpoint && config.origins.size), locales: config.locales });
+        return respond(200, { service: 'polybot-assessment', configured: Boolean(config.key && config.endpoint && config.origins.size), locales: config.locales });
       }
       if (!origin || !config.origins.size) throw new ServiceError(403, 'Set ALLOWED_ORIGINS to the exact extension or localhost studio origin.');
       if (req.url !== '/assess') throw new ServiceError(404, 'Route not found.');

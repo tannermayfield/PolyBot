@@ -27,7 +27,7 @@ The sidebar label is **Explore Resources** and resource links appear in the orde
 - `setLanguages(targetCode,nativeCode,targetCodes?)` validates against `SPTubeLang.LANGUAGES`, persists the active target, native language, and optional quick-switcher target set, then returns `load()`.
 - `recordVocabularySnapshot(targetCode?)` records a mastery point only when that language's known or total count changes. The studio calls it on startup, language switches, and vocabulary-store changes.
 - `lookup(term)` checks saved target-language definitions, then requests automatic detection between the configured target and native languages. Translation results include `sourceLang` and `targetLang`; standalone preview keeps an explicit unavailable state.
-- `saveMediaResponse({itemId,mode,text})` persists a bounded writing or speaking-reflection response under `giftOfTonguesLearning`.
+- `saveMediaResponse({itemId,mode,text})` persists a bounded writing or speaking-reflection response under `polybotLearning`.
 - `completeActivity(id)` records actual user completion only. No progress is seeded.
 
 Vocabulary is read from `sptubeVocabulary_<target>` and `sptubeDefinitions_<target>`, using `matched` before `translation`. Grammar topics keep CEFR metadata internally but render under Beginner (A1/A2), Intermediate (B1/B2), and Advanced (C1). Spanish includes stable provided reading and listening items for interactive and care-free use. Browser extension captures appear only in Your Media. No completion is fabricated.
@@ -48,7 +48,7 @@ All views must work in light and dark themes and at 390px width without horizont
 
 ## Personalization modules
 
-`personalization-method.js`, `personalization-interests.js`, and `personalization-regions.js` expose `render(context)` and `mount(root, context)`. Context supplies the current `target` language and `notify(message, error)`. Mount can return a cleanup function; otherwise the shell calls an optional `unmount()` before replacing the view or leaving the page. Each module owns scoped styles and local events. Preferences use separate browser-local keys (`giftOfTonguesMethod`, `giftOfTonguesInterests`, `giftOfTonguesRegion`) and are not part of existing studio backup exports. They do not yet modify generated lessons. Quiz results describe flexible preferences, not a validated learning-style diagnosis.
+`personalization-method.js`, `personalization-interests.js`, and `personalization-regions.js` expose `render(context)` and `mount(root, context)`. Context supplies the current `target` language and `notify(message, error)`. Mount can return a cleanup function; otherwise the shell calls an optional `unmount()` before replacing the view or leaving the page. Each module owns scoped styles and local events. Preferences use separate browser-local keys (`polybotMethod`, `polybotInterests`, `polybotRegion`) and are not part of existing studio backup exports. They do not yet modify generated lessons. Quiz results describe flexible preferences, not a validated learning-style diagnosis.
 
 The home progress bar counts completed curriculum topics for the active language, matching My Path. The map uses local Natural Earth outlines; remote speech samples require internet access and retain their source attribution. Spanish regions remain explicitly Spanish when another target language is active.
 

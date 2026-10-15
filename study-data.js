@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict';
 
-  const STORAGE_KEY = 'giftOfTonguesStudio';
+  const STORAGE_KEY = 'polybotStudio';
   const DAY = 86400000;
   const MAX_AUDIO = 28 * 1024 * 1024; // Encoded length: approximately 21 MB of audio.
   const MAX_BACKUP = 120 * 1024 * 1024;
@@ -401,7 +401,17 @@
   }
 
   function createStore(options = {}) {
-    const storage = options.storage || browserStorage();
+    const backend = options.storage || browserStorage();
+    // Read pre-Polybot data when no value exists under the current key.
+    const legacyKey = STORAGE_KEY.replace('polybot', 'giftOfTongues');
+    const storage = Object.assign({}, backend, {
+      async get(keys) {
+        const values = await backend.get(keys.includes(STORAGE_KEY) ? [...keys, legacyKey] : keys);
+        if (!Object.prototype.hasOwnProperty.call(values, STORAGE_KEY) &&
+            Object.prototype.hasOwnProperty.call(values, legacyKey)) values[STORAGE_KEY] = values[legacyKey];
+        return values;
+      }
+    });
     const locks = own(options, 'locks') ? options.locks : root.navigator && root.navigator.locks;
     const clock = options.now || Date.now;
     const makeId = options.makeId || (prefix => `${prefix}-${root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)}`);
@@ -552,7 +562,7 @@
       },
       dueItems,
       stats,
-      async exportBackup() { return { format: 'gift-of-tongues-studio', version: 1, state: await transact(null, true) }; },
+      async exportBackup() { return { format: 'polybot-studio', version: 1, state: await transact(null, true) }; },
       importBackup(input) {
         let candidate;
         try {
@@ -561,7 +571,7 @@
             input = JSON.parse(input);
           }
           object(input, 'Backup'); safeTree(input);
-          if (input.format !== 'gift-of-tongues-studio' || input.version !== 1) fail('Choose a supported Gift of Tongues studio backup.');
+          if (!['polybot-studio', 'gift-of-tongues-studio'].includes(input.format) || input.version !== 1) fail('Choose a supported Polybot studio backup.');
           if (JSON.stringify(input).length > MAX_BACKUP) fail('Backup is too large (maximum 120 MB).');
           candidate = normalizeState(input.state);
         } catch (error) { return Promise.reject(error); }

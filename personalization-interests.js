@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const STORAGE_KEY = 'giftOfTonguesInterests';
+  const STORAGE_KEY = 'polybotInterests';
   const LIMIT = 10;
   const CATEGORIES = [
     ['Food & drink', 'Cooking', 'Baking', 'Coffee & tea', 'Restaurants', 'Street food', 'Vegetarian food', 'Wine & drinks', 'Food traditions'],
@@ -46,7 +46,7 @@
     let storageIssue = '';
     const status = page.querySelector('[data-interest-save-status]');
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = (window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(STORAGE_KEY.replace('polybot', 'giftOfTongues')));
       if (raw) {
         const saved = JSON.parse(raw);
         if (saved?.version !== 1 || !Array.isArray(saved.selected)) throw new Error('Invalid interests');

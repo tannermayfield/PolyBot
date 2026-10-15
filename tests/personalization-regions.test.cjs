@@ -13,7 +13,7 @@ function fixture(initial, code='es') {
   const select={value:'',addEventListener(name,fn){events.change=fn;}};
   const root={querySelector:s=>s==='[data-region-map]'?map:s==='[data-region-detail]'?detail:select};
   const window={};
-  vm.runInNewContext(src,{window,localStorage:{getItem:()=>value,setItem:(k,v)=>{assert.equal(k,'giftOfTonguesRegion');value=v;}},AbortController,fetch:()=>new Promise(()=>{})});
+  vm.runInNewContext(src,{window,localStorage:{getItem:()=>value,setItem:(k,v)=>{assert.equal(k,'polybotRegion');value=v;}},AbortController,fetch:()=>new Promise(()=>{})});
   const api=window.PersonalizationRegions;
   const cleanup=api.mount(root,{target:{code}});
   return {api,detail,select,events,cleanup,get saved(){return JSON.parse(value)},get paused(){return paused}};

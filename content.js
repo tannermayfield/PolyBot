@@ -1,4 +1,4 @@
-// Gift of Tongues Content Script — YouTube transcript + on-screen caption word lookup
+// Polybot Content Script — YouTube transcript + on-screen caption word lookup
 // Site-specific glue only: finding transcript/caption DOM elements and
 // pausing the video while a caption word is hovered/clicked. Whether
 // YouTube's own captions are on at all is left entirely up to YouTube's own

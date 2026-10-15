@@ -35,7 +35,7 @@ Methods:
 - `rateReview(kind,itemId,rating,now?)` -> Review (`kind` meaning/speaking, rating again/hard/good/easy).
 - `dueItems(state,kind,now?)` synchronous -> array of Vocabulary items or Phrases due, including unreviewed items. Do not mix meaning and speaking mastery.
 - `stats(state,now?)` synchronous -> `{attempts,practiceMinutes,practicedDays,dueSpeaking,dueMeaning}`.
-- `exportBackup()` -> JSON-safe `{format:'gift-of-tongues-studio',version:1,state:<persisted-state>}` including references/attempt audio; `importBackup(backup)` validates and merges safely, preserving existing records.
+- `exportBackup()` -> JSON-safe `{format:'polybot-studio',version:1,state:<persisted-state>}` including references/attempt audio; `importBackup(backup)` validates and merges safely, preserving existing records.
 - `subscribe(callback)` -> unsubscribe. Callback indicates change; caller can load. Use chrome.storage.local; standalone localhost preview fallback localStorage. Serialize read-modify-write via Web Locks where available and a local queue. Never overwrite whole legacy stores. No async state writes during pure render/load unless migration required. Bound/validate imported content and avoid prototype pollution.
 
 `StudioData.ACCENTS` synchronous constant: array `{id,label,shortLabel,description}` for es-MX, es-ES, es-AR, es-CO, es-CL, es-PR, es-CU, es-PE. Labels describe regions, not guarantees of generated accent accuracy.

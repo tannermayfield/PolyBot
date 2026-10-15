@@ -1,4 +1,4 @@
-// Gift of Tongues Popup Script
+// Polybot Popup Script
 
 let LANG = window.SPTubeLang.DEFAULT_LANG;
 let KEYS = window.SPTubeLang.storageKeys(LANG);

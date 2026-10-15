@@ -1,4 +1,4 @@
-// Gift of Tongues — Word frequency levels for the "fast catch-up" feature.
+// Polybot — Word frequency levels for the "fast catch-up" feature.
 //
 // Currently only Spanish has a frequency list — see languages.js's
 // CATCHUP_SUPPORTED map, which catchup.js checks before using this.

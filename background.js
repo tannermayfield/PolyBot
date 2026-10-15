@@ -1,4 +1,4 @@
-// Gift of Tongues Background Service Worker
+// Polybot Background Service Worker
 // Translates the transcript sentence + highlights what the clicked word maps to.
 // Which language it translates from/to is passed in on each message: msg.lang
 // is the language being learned, msg.nativeLang is the language definitions

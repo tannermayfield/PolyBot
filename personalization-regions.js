@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const KEY = 'giftOfTonguesRegion';
+  const KEY = 'polybotRegion';
   const CVC = 'https://cvc.cervantes.es/LENGUA/voces_hispanicas/';
   const IU = 'https://pragmatics.indiana.edu/';
   const UNED = 'https://labfon.flog.uned.es/en/laboratorio/antonioquilis/legado/guineaecuatorial';
@@ -35,7 +35,7 @@
     institution: id === 'GQ' ? 'UNED · Antonio Quilis Phonetics Laboratory' : file.endsWith('.mp4') ? 'Instituto Cervantes · Catálogo de voces hispánicas' : 'Indiana University · Voces Hispanas', title
   }));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function saved() { try { const value=JSON.parse(localStorage.getItem(KEY));return countries.some(c=>c.id===value?.countryCode)?value.countryCode:null; } catch { return null; } }
+  function saved() { try { const value=JSON.parse((localStorage.getItem(KEY) ?? localStorage.getItem(KEY.replace('polybot', 'giftOfTongues'))));return countries.some(c=>c.id===value?.countryCode)?value.countryCode:null; } catch { return null; } }
   const isSpanish = ctx => /^es(?:-|$)/i.test(ctx?.target?.code || 'es');
   function render(ctx) {
     return `<section class="regions-page"><a href="#home" class="text-button">← Home</a><header class="page-heading"><div><p class="eyebrow">Personalization · Spanish</p><h1>Regions &amp; Accents</h1><p class="subtitle">Find a voice you connect with. Explore the Spanish-speaking world, listen, and choose a region for your learning.</p></div></header>${!isSpanish(ctx)?'<p class="regions-notice">Regions for your current language are coming later. Explore Spanish below; your current language will stay unchanged.</p>':''}<div class="regions-layout"><section class="regions-map-card card"><div class="regions-map-heading"><h2>A world of Spanish</h2><p>Choose a country on the map, or use the country selector.</p></div><div class="regions-map" data-region-map><p class="regions-map-loading">Loading geographic map…</p></div><div class="regions-selector"><label for="region-country">Country or territory</label><select id="region-country">${[...new Set(countries.map(c=>c.group))].map(group=>`<optgroup label="${group}">${countries.filter(c=>c.group===group).map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</optgroup>`).join('')}</select><p>20 countries and Puerto Rico. Spanish-speaking communities also flourish elsewhere.</p></div></section><section class="regions-detail card" aria-label="Selected region" data-region-detail></section></div><p class="regions-footnote">Every country contains many accents. These recordings illustrate individual speakers, not a single national standard. Map: <a href="https://github.com/datasets/geo-countries" target="_blank" rel="noopener noreferrer">Natural Earth geographic data</a>.</p></section>`;

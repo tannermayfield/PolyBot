@@ -79,7 +79,7 @@ function shell() {
   switcher.disabled = targetLanguages().length < 2;
   $('#language-context-note').textContent = targetLanguages().length < 2 ? `Add target languages in Settings · meanings in ${nativeLang().name}` : `Meanings in ${nativeLang().name}`;
   document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr';
-  document.title = `${pages[page]} · Gift of Tongues`;
+  document.title = `${pages[page]} · Polybot`;
 }
 function initPhrase(id) {
   const item = state.phrases.find(item => item.id === id) || D.dueItems(state,'speaking')[0] || state.phrases[0]; stopAudio();
@@ -557,7 +557,7 @@ async function compareTiming(id) {
 }
 async function exportBackup() {
   const backup = await D.exportBackup(), blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
-  const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = `spanish-studio-${new Date().toISOString().slice(0,10)}.json`; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url),5000); notify('Studio backup exported, including saved audio.');
+  const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = `polybot-studio-${new Date().toISOString().slice(0,10)}.json`; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url),5000); notify('Studio backup exported, including saved audio.');
 }
 async function action(name,node) {
   if(busy() && !['record','cancel-generation','close-dialog','stop-audio'].includes(name)) return notify('Finish your current recording or request first.');

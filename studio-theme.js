@@ -1,12 +1,12 @@
 /* Applies the saved studio theme before the page paints. */
 (() => {
   'use strict';
-  const KEY = 'giftOfTonguesTheme';
+  const KEY = 'polybotTheme';
   const choices = new Set(['light', 'dark', 'system']);
   const media = matchMedia('(prefers-color-scheme: dark)');
 
   function stored() {
-    try { const value = localStorage.getItem(KEY); return choices.has(value) ? value : 'system'; }
+    try { const value = (localStorage.getItem(KEY) ?? localStorage.getItem(KEY.replace('polybot', 'giftOfTongues'))); return choices.has(value) ? value : 'system'; }
     catch (_) { return 'system'; }
   }
   function apply(preference = stored(), persist = true) {

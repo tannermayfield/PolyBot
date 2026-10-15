@@ -1,7 +1,7 @@
 /* Personal learning preferences: a reflective quiz, not a diagnostic test. */
 (() => {
 'use strict';
-const KEY = 'giftOfTonguesMethod';
+const KEY = 'polybotMethod';
 const modalities = [
   ['visual','Visual','Pictures, diagrams, and visual examples'],
   ['audio','Listening','Conversations, stories, and sound'],
@@ -30,7 +30,7 @@ function score(answers) {
   return {version:1,output:average('output'),grammar:average('grammar'),modalities:[...new Set(questions.flatMap((q,i)=>q.axis==='modality'?[q.options[answers[i]][1]]:[]))]};
 }
 function read() {
-  try { const raw=localStorage.getItem(KEY); if(!raw) return {value:null}; const value=JSON.parse(raw); return valid(value)?{value}:{value:null,error:'Your saved learning preferences could not be read. Choose and save new preferences below.'}; }
+  try { const raw=(localStorage.getItem(KEY) ?? localStorage.getItem(KEY.replace('polybot', 'giftOfTongues'))); if(!raw) return {value:null}; const value=JSON.parse(raw); return valid(value)?{value}:{value:null,error:'Your saved learning preferences could not be read. Choose and save new preferences below.'}; }
   catch { return {value:null,error:'Learning preferences could not be loaded from this browser. You can still explore the quiz.'}; }
 }
 const defaultValue = () => ({version:1,output:50,grammar:50,modalities:['audio','reading']});

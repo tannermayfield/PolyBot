@@ -1,4 +1,4 @@
-// Gift of Tongues — non-YouTube caption diagnostic
+// Polybot — non-YouTube caption diagnostic
 // Read-only: doesn't change anything on the page. Paste into the DevTools
 // Console while a captioned video is playing, then copy the full output
 // back.
@@ -14,7 +14,7 @@
   const log = [];
   const say = (...args) => log.push(args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
 
-  say('=== Gift of Tongues caption diagnostic ===');
+  say('=== Polybot caption diagnostic ===');
   say('URL:', location.href);
   say('In iframe:', window !== window.top);
 

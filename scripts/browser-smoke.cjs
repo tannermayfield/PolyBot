@@ -283,7 +283,7 @@ async function main() {
     const backupPath = path.join(output, 'learning-test-backup.json');
     await download.saveAs(backupPath);
     const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
-    assert.equal(backup.format, 'gift-of-tongues-studio');
+    assert.equal(backup.format, 'polybot-studio');
     await page.locator('[data-action="close-dialog"]').first().click();
 
     // Language settings reconfigure resources and expose honest capability limits.

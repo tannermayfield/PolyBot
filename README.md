@@ -1,4 +1,4 @@
-# Gift of Tongues — Language Learning
+# Polybot — Language Learning
 
 A Manifest V3 Chrome extension that turns words and phrases from the web into a balanced language-learning workspace. The app brings vocabulary, grammar, pronunciation, and saved media together around a structured **My Path** experience for every supported target language.
 
@@ -49,3 +49,5 @@ Preview opens at `http://127.0.0.1:4173` and uses a separate local browser store
 The optional browser smoke script uses Playwright and an installed Chromium browser; see [docs/verification.md](docs/verification.md). The assessment service has its own configuration instructions in `server/README.md`.
 
 Use the studio's export/import controls for studio recordings, references, schedules, and settings. Vocabulary captured from websites remains in its existing per-language browser stores.
+
+Polybot uses `polybot` for package/service identifiers, `polybotStudio` and `polybotLearning` for new study storage, and `polybot-studio-YYYY-MM-DD.json` for backup downloads. Existing saved preferences and study data remain readable, and backups from before the rename can still be imported.

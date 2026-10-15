@@ -1,4 +1,4 @@
-// Gift of Tongues — Fast catch-up logic
+// Polybot — Fast catch-up logic
 (function () {
   'use strict';
 

@@ -1,4 +1,4 @@
-// Gift of Tongues — Shared language configuration
+// Polybot — Shared language configuration
 // A single source of truth for "which languages can I learn" plus the small
 // helpers every other script (popup, manager, catchup, background, content
 // scripts) uses to read/write the user's chosen target language and to

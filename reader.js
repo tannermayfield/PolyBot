@@ -1,4 +1,4 @@
-// Gift of Tongues Reading Mode — click-to-learn on any website
+// Polybot Reading Mode — click-to-learn on any website
 // Turns text in an article, ebook, or any other page into the same
 // color-coded, clickable words as the YouTube transcript/caption feature,
 // using the shared engine in shared.js. Only runs on sites the user has

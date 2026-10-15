@@ -129,3 +129,11 @@ Creates learners with hidden traits and realistic practice histories (about 25,0
 ```
 
 Builds skill scores, profiles, study patterns and inferred preferences (definitions in docs/LEARNER_MODEL.md). Run it after the pipeline; the simulator's `--run-pipeline` does both. Read one learner's model at `GET http://127.0.0.1:17495/v1/learners/<learner_id>/model?language=es`.
+
+## 10. Personalization (Phase 6)
+
+```powershell
+.venv\Scripts\python -m polybot_insights.personalization
+```
+
+Runs the rule catalog (docs/PERSONALIZATION_RULES.md) for every learner after the learner model is built, and keeps `personalization.decisions` current. Read one learner's decisions, each with its reason and the rule behind it, at `GET http://127.0.0.1:17495/v1/learners/<learner_id>/decisions?language=es`. The full daily sequence is pipeline → model → personalization; the simulator's `--run-pipeline` runs all three.

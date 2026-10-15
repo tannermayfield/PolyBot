@@ -21,7 +21,8 @@ from pydantic import ValidationError
 from polybot_insights.config import Settings
 from polybot_insights.ingest import MAX_BODY_BYTES, MAX_EVENTS, EventBatch, store_batch
 from polybot_insights.model.build import build_learner_model
-from polybot_insights.model.read import learner_model
+from polybot_insights.model.read import learner_decisions, learner_model
+from polybot_insights.personalization.engine import run_personalization
 from polybot_insights.pipeline.run import run_pipeline
 
 log = logging.getLogger("polybot_insights.api")
@@ -113,6 +114,30 @@ def create_app(settings: Settings, connect: Callable[[], psycopg.Connection] | N
             log.error("operation=learner_model_trigger status=failed error=%s", type(error).__name__)
             return _error(503, "storage_unavailable", "The learner model could not reach the database.")
         return JSONResponse(status_code=200, content=summary)
+
+    @app.post("/v1/personalization-runs")
+    def trigger_personalization():
+        """Re-run the personalization rules for every learner."""
+        try:
+            with connect() as conn:
+                conn.autocommit = True
+                summary = run_personalization(conn, trigger_source="api")
+        except psycopg.Error as error:
+            log.error("operation=personalization_trigger status=failed error=%s", type(error).__name__)
+            return _error(503, "storage_unavailable", "Personalization could not reach the database.")
+        return JSONResponse(status_code=200, content=summary)
+
+    @app.get("/v1/learners/{learner_id}/decisions")
+    def get_decisions(learner_id: UUID, language: str | None = None):
+        if language is not None and not LANGUAGE_CODE.match(language):
+            return _error(422, "invalid_language", "language must be a code such as es or zh-CN.")
+        try:
+            with connect() as conn:
+                result = learner_decisions(conn, learner_id, language)
+        except psycopg.Error as error:
+            log.error("operation=read_decisions status=failed error=%s", type(error).__name__)
+            return _error(503, "storage_unavailable", "Decisions could not be read.")
+        return result
 
     @app.get("/v1/learners/{learner_id}/model")
     def get_learner_model(learner_id: UUID, language: str | None = None):

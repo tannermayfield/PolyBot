@@ -361,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--invalid-rate", type=float, default=0.005,
                         help="share of events deliberately corrupted to exercise validation (default 0.005)")
     parser.add_argument("--run-pipeline", action="store_true",
-                        help="process the new events and build the learner model (with daily history) right away")
+                        help="process the new events, build the learner model (with daily history) and run personalization")
     parser.add_argument("--allow-real-learners", action="store_true",
                         help="add simulated learners even if the database already holds real ones")
     args = parser.parse_args(argv)
@@ -383,6 +383,8 @@ def main(argv: list[str] | None = None) -> int:
             from polybot_insights.pipeline.run import run_pipeline
             print(run_pipeline(conn, "cli").as_dict())
             print(build_learner_model(conn, backfill_days=args.days, trigger_source="cli"))
+            from polybot_insights.personalization.engine import run_personalization
+            print(run_personalization(conn, "cli"))
     return 0
 
 

@@ -80,3 +80,22 @@ def learner_model(conn: psycopg.Connection, learner_id: UUID, language: str | No
         "study_patterns": patterns, "preferences": preferences,
         "progress_trends": trends, "recurring_errors": errors, "weekly_sessions": sessions,
     })
+
+
+def learner_decisions(conn: psycopg.Connection, learner_id: UUID, language: str | None = None) -> dict:
+    """Active personalization decisions (spec §24): what, why, how the app adapts, and the
+    recommendations behind each one. Decisions that apply to every language are included."""
+    cur = conn.cursor(row_factory=dict_row)
+    decisions = cur.execute(
+        """SELECT decision_id, language_code, decision_type, recommended_value, reason, adaptation, source_metrics,
+                  confidence, confidence_label, rule_id, rule_version, rule_description, follows_learner_choice, created_at
+           FROM analytics.vw_user_personalization_summary
+           WHERE learner_id = %s AND (language_code IS NULL OR %s::text IS NULL OR language_code = %s)
+           ORDER BY decision_type, language_code NULLS LAST""", (learner_id, language, language)).fetchall()
+    ids = [d["decision_id"] for d in decisions]
+    recs = cur.execute(
+        """SELECT recommendation_id, decision_id, target_type, target_id, rank, first_shown_at, outcome
+           FROM personalization.recommendations WHERE decision_id = ANY(%s) ORDER BY decision_id, rank""", (ids,)).fetchall()
+    for d in decisions:
+        d["recommendations"] = [r for r in recs if r["decision_id"] == d["decision_id"]]
+    return _plain({"learner_id": learner_id, "language": language, "decisions": decisions})

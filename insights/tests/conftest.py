@@ -109,10 +109,11 @@ def pipeline_url(database_url):
 
 
 # Data written by ingest and the pipeline, children before parents. Catalog tables stay.
-DATA_TABLES = ("personalization.model_predictions", "personalization.recommendations", "personalization.decisions",
-               "analytics.inferred_preferences", "analytics.study_patterns", "analytics.skill_scores",
+DATA_TABLES = ("analytics.inferred_preferences", "analytics.study_patterns", "analytics.skill_scores",
                "analytics.learner_profiles", "core.explicit_preferences", "core.assessments", "core.attempts",
-               "core.sessions", "ops.validation_issues", "core.learner_events", "raw.events", "raw.event_batches")
+               "core.sessions", "ops.validation_issues", "core.learner_events",  # events reference recommendations
+               "personalization.model_predictions", "personalization.recommendations", "personalization.decisions",
+               "raw.events", "raw.event_batches")
 
 
 def reset_data(url: str) -> None:

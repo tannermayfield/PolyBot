@@ -9,7 +9,7 @@ Tracks progress through the adaptive-learning phases. Update at the end of every
 | 3 Event tracking | **Built** (2026-10-15), awaiting owner check in the installed extension | `insights-events.js`, `vocab-writer.js`, `prefs-store.js`, `vocab-recall.js`, `insights/polybot_insights/api/`, `catalog.py`, `scripts/export-catalog.cjs`; ADR-016–021. JS 123/123, `npm run check` passing; Python 63/63 (incl. a contract test running the real JS emitter against the real API into PostgreSQL); Quick Recall checked in headless Chrome (preview, French) | Real `polybot` database not yet created (owner step: insights/README.md §3–6). Fixed two migration-001 constraints before first real apply (DATA_MODEL §5.1). Existing `scripts/*-smoke.cjs` wait for `.home-path`, which the current home page no longer has: they fail on the previous commit too |
 | 4 Data pipeline | **Built** (2026-10-15), verified on simulated data | `insights/polybot_insights/pipeline/` (validate, transform, run), `ingest.py`, `simulator.py`; ADR-022–023. Python 128/128 incl. 45 rule tests, 15 end-to-end pipeline tests and 5 simulator tests (one proves the simulator refuses a database holding real learners). 25 simulated learners × 45 days (≈25k events) load in ≈27 s; deliberately corrupted events (0.5 %) are all quarantined with reasons; 0 `TRANSFORM_FAILED` | Not yet run on real learner data (needs the owner's database, insights/README.md §3–6) |
 | 5 Learner model | **Built** (2026-10-15), verified on simulated data | `model/build.py`, `model/read.py`, migration `003` (8 `vw_*` views + `confidence_label()`), [LEARNER_MODEL.md](LEARNER_MODEL.md), ADR-024, `GET /v1/learners/{id}/model`. Python 135/135; mastery ranks simulated learners like their hidden ability (Spearman > 0.6); 46-day backfill on 25 learners ≈ 12 s | Grammar, listening and reading have self-reports only until graded exercises exist; the proficiency band is a rough estimate, not CEFR |
-| 6 Rule-based personalization | Not started | — | |
+| 6 Rule-based personalization | **Built** (2026-10-15), verified on simulated data | `personalization/rules.py` (18 rules, 9 decision types), `engine.py`, migration `004` (`vw_user_personalization_summary`, `vw_recommendation_outcomes`), [PERSONALIZATION_RULES.md](PERSONALIZATION_RULES.md), ADR-025, `GET /v1/learners/{id}/decisions`. Python 149/149: each rule unit-tested; explicit preferences win and disagreement is stated; reruns do not churn; a new learner choice marks the old decision `overridden_by_learner`; outcomes come from events | Decisions are shown (Phase 7) but do not yet change which exercises the extension serves; topic decisions wait for topic-tagged content |
 | 7 User dashboard | Not started | — | |
 | 8 BI / export layer | Not started | — | |
 | 9 Machine learning | Not started | — | |
@@ -31,8 +31,8 @@ Tracks progress through the adaptive-learning phases. Update at the end of every
 - [x] Learner profiles update over time *(daily as-of snapshots)*
 - [x] Explicit and inferred preferences are distinguished *(separate tables; "You told us" / "Polybot observed" view; explicit wins)*
 - [x] Inferred attributes include confidence *(value, confidence, evidence count, rationale)*
-- [ ] Personalization decisions use learner data
-- [ ] Personalization decisions include reasons
+- [x] Personalization decisions use learner data *(simulated data)*
+- [x] Personalization decisions include reasons *(reason, adaptation, source metrics, rule; enforced by constraints)*
 - [ ] Dashboard explains the learner model
 - [ ] Dashboard explains how content is adapted
 - [ ] Tableau-ready output exists

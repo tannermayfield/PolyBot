@@ -86,7 +86,8 @@ sequenceDiagram
 | `POST /v1/pipeline-runs` | 4 ✓ | Process every pending raw event now (development and simulator use). Returns the run summary: status, row counts and issues by rule |
 | `GET /v1/learners/{learner_id}/model?language=` | 5 ✓ | Skill scores, strengths and weaker areas, profile, study patterns, explicit and inferred preferences (with confidence labels), weekly trends, recurring errors. 404 for an unknown learner |
 | `POST /v1/learner-model-runs` | 5 ✓ | Rebuild today's learner model snapshot |
-| `GET /v1/learners/{learner_id}/decisions?language=` | 6 | Active decisions with reason, adaptation text, source metrics, and recommendations |
+| `GET /v1/learners/{learner_id}/decisions?language=` | 6 ✓ | Active decisions with reason, adaptation text, source metrics, confidence label, rule, and recommendations |
+| `POST /v1/personalization-runs` | 6 ✓ | Re-run the rules for every learner |
 
 Preference changes are **not** a separate write endpoint. They travel as `preference_set` events so every write follows the same path (ADR-011). The service worker flushes immediately after a preference event so overrides take effect within one pipeline run.
 
@@ -142,6 +143,7 @@ Preference changes are **not** a separate write endpoint. They travel as `prefer
     │   ├── simulator.py            synthetic learners (ADR-003, ADR-023)
     │   ├── pipeline/               validate.py (19 rules, pure) · transform.py (core.*) · run.py (runs, ADR-022)
     │   ├── model/                  build.py (as-of SQL snapshots, ADR-024) · read.py (one learner as JSON)
+    │   ├── personalization/        rules.py (catalog, ADR-025) · engine.py (reconcile decisions, outcomes)
     │   ├── api/app.py              FastAPI service (python -m polybot_insights.api)
     │   └── db/
     │       ├── migrate.py          applies numbered SQL migrations, records them in ops.schema_migrations
@@ -159,7 +161,7 @@ Preference changes are **not** a separate write endpoint. They travel as `prefer
         └── test_simulator.py       simulated learners load cleanly; corrupted ones are quarantined
 ```
 
-Later phases add `personalization/`, `ml/` and `exports/` beside `model/`.
+Later phases add `ml/` and `exports/` beside `personalization/`.
 
 ## 9. Technology choices
 

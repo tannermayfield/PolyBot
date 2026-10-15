@@ -8,7 +8,9 @@ means a validation bug can never lose data: every event is stored as sent.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Callable
+from uuid import UUID
 
 import psycopg
 from fastapi import FastAPI, Request
@@ -18,9 +20,12 @@ from pydantic import ValidationError
 
 from polybot_insights.config import Settings
 from polybot_insights.ingest import MAX_BODY_BYTES, MAX_EVENTS, EventBatch, store_batch
+from polybot_insights.model.build import build_learner_model
+from polybot_insights.model.read import learner_model
 from polybot_insights.pipeline.run import run_pipeline
 
 log = logging.getLogger("polybot_insights.api")
+LANGUAGE_CODE = re.compile(r"^[a-z]{2,3}(-[A-Z]{2})?$")
 
 __all__ = ["create_app", "main", "MAX_BODY_BYTES", "MAX_EVENTS", "EventBatch"]
 
@@ -96,6 +101,32 @@ def create_app(settings: Settings, connect: Callable[[], psycopg.Connection] | N
             log.error("operation=pipeline_trigger status=failed error=%s", type(error).__name__)
             return _error(503, "storage_unavailable", "The pipeline could not reach the database.")
         return JSONResponse(status_code=200, content=summary.as_dict())
+
+    @app.post("/v1/learner-model-runs")
+    def trigger_learner_model():
+        """Rebuild today's learner model snapshot (development and simulator use)."""
+        try:
+            with connect() as conn:
+                conn.autocommit = True
+                summary = build_learner_model(conn, trigger_source="api")
+        except psycopg.Error as error:
+            log.error("operation=learner_model_trigger status=failed error=%s", type(error).__name__)
+            return _error(503, "storage_unavailable", "The learner model could not reach the database.")
+        return JSONResponse(status_code=200, content=summary)
+
+    @app.get("/v1/learners/{learner_id}/model")
+    def get_learner_model(learner_id: UUID, language: str | None = None):
+        if language is not None and not LANGUAGE_CODE.match(language):
+            return _error(422, "invalid_language", "language must be a code such as es or zh-CN.")
+        try:
+            with connect() as conn:
+                model = learner_model(conn, learner_id, language)
+        except psycopg.Error as error:
+            log.error("operation=read_model status=failed error=%s", type(error).__name__)
+            return _error(503, "storage_unavailable", "The learner model could not be read.")
+        if model is None:
+            return _error(404, "unknown_learner", "No events have been processed for this learner yet.")
+        return model
 
     return app
 

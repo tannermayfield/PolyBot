@@ -8,7 +8,7 @@ Tracks progress through the adaptive-learning phases. Update at the end of every
 | 2 Data architecture | **Done** (2026-10-15) | [DECISIONS.md](DECISIONS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [EVENT_TAXONOMY.md](EVENT_TAXONOMY.md), [DATA_MODEL.md](DATA_MODEL.md), migrations `001`–`002`, `insights/tests/test_schema.py` (39 passing on a temporary PostgreSQL 18 cluster) | Rename committed as `ed1cd8c`. `core.learner_events` indexes chosen from EXPLAIN measurements on 500k synthetic events (DATA_MODEL §6.1). Preference-storage move deferred to Phase 3 (ADR-006) |
 | 3 Event tracking | **Built** (2026-10-15), awaiting owner check in the installed extension | `insights-events.js`, `vocab-writer.js`, `prefs-store.js`, `vocab-recall.js`, `insights/polybot_insights/api/`, `catalog.py`, `scripts/export-catalog.cjs`; ADR-016–021. JS 123/123, `npm run check` passing; Python 63/63 (incl. a contract test running the real JS emitter against the real API into PostgreSQL); Quick Recall checked in headless Chrome (preview, French) | Real `polybot` database not yet created (owner step: insights/README.md §3–6). Fixed two migration-001 constraints before first real apply (DATA_MODEL §5.1). Existing `scripts/*-smoke.cjs` wait for `.home-path`, which the current home page no longer has: they fail on the previous commit too |
 | 4 Data pipeline | **Built** (2026-10-15), verified on simulated data | `insights/polybot_insights/pipeline/` (validate, transform, run), `ingest.py`, `simulator.py`; ADR-022–023. Python 128/128 incl. 45 rule tests, 15 end-to-end pipeline tests and 5 simulator tests (one proves the simulator refuses a database holding real learners). 25 simulated learners × 45 days (≈25k events) load in ≈27 s; deliberately corrupted events (0.5 %) are all quarantined with reasons; 0 `TRANSFORM_FAILED` | Not yet run on real learner data (needs the owner's database, insights/README.md §3–6) |
-| 5 Learner model | Not started | — | |
+| 5 Learner model | **Built** (2026-10-15), verified on simulated data | `model/build.py`, `model/read.py`, migration `003` (8 `vw_*` views + `confidence_label()`), [LEARNER_MODEL.md](LEARNER_MODEL.md), ADR-024, `GET /v1/learners/{id}/model`. Python 135/135; mastery ranks simulated learners like their hidden ability (Spearman > 0.6); 46-day backfill on 25 learners ≈ 12 s | Grammar, listening and reading have self-reports only until graded exercises exist; the proficiency band is a rough estimate, not CEFR |
 | 6 Rule-based personalization | Not started | — | |
 | 7 User dashboard | Not started | — | |
 | 8 BI / export layer | Not started | — | |
@@ -27,10 +27,10 @@ Tracks progress through the adaptive-learning phases. Update at the end of every
 - [ ] Meaningful learner events are stored
 - [x] Event data is validated *(19 rules + transform guard; verified on simulated data)*
 - [x] Analytics pipeline runs *(raw → core with run accounting; verified on simulated data)*
-- [ ] Learner metrics are generated
-- [ ] Learner profiles update over time
-- [ ] Explicit and inferred preferences are distinguished
-- [ ] Inferred attributes include confidence
+- [x] Learner metrics are generated *(simulated data)*
+- [x] Learner profiles update over time *(daily as-of snapshots)*
+- [x] Explicit and inferred preferences are distinguished *(separate tables; "You told us" / "Polybot observed" view; explicit wins)*
+- [x] Inferred attributes include confidence *(value, confidence, evidence count, rationale)*
 - [ ] Personalization decisions use learner data
 - [ ] Personalization decisions include reasons
 - [ ] Dashboard explains the learner model

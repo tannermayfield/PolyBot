@@ -82,6 +82,7 @@ class Learner:
 class Simulator:
     def __init__(self, conn: psycopg.Connection, seed: int = 7, invalid_rate: float = 0.0, end: datetime | None = None):
         self.conn, self.rng, self.invalid_rate = conn, random.Random(seed), invalid_rate
+        self.learners: list[Learner] = []  # kept so tests can compare the model with the hidden truth
         self.end = end or datetime.now(timezone.utc)
         self.spanish = [(r[0], r[1] or 3) for r in conn.execute(
             "SELECT vocab_item_id, difficulty_band FROM core.vocabulary_items WHERE language_code = 'es' AND difficulty_band <= 3 "
@@ -327,6 +328,7 @@ class Simulator:
         totals = {"learners": 0, "batches": 0, "events": 0, "resent_batches": 0}
         for _ in range(learners):
             learner = self.make_learner()
+            self.learners.append(learner)
             for batch in self.batches(learner, self.simulate_learner(learner, days)):
                 store_batch(self.conn, batch, len(batch.model_dump_json()))
                 totals["batches"] += 1
@@ -358,7 +360,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--invalid-rate", type=float, default=0.005,
                         help="share of events deliberately corrupted to exercise validation (default 0.005)")
-    parser.add_argument("--run-pipeline", action="store_true", help="process the new events right away")
+    parser.add_argument("--run-pipeline", action="store_true",
+                        help="process the new events and build the learner model (with daily history) right away")
     parser.add_argument("--allow-real-learners", action="store_true",
                         help="add simulated learners even if the database already holds real ones")
     args = parser.parse_args(argv)
@@ -376,8 +379,10 @@ def main(argv: list[str] | None = None) -> int:
         totals = Simulator(conn, args.seed, args.invalid_rate).run(args.learners, args.days)
         print({"simulated": totals})
         if args.run_pipeline:
+            from polybot_insights.model.build import build_learner_model
             from polybot_insights.pipeline.run import run_pipeline
             print(run_pipeline(conn, "cli").as_dict())
+            print(build_learner_model(conn, backfill_days=args.days, trigger_source="cli"))
     return 0
 
 

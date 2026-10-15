@@ -120,3 +120,12 @@ $env:POLYBOT_DATABASE_URL = "postgresql://polybot_app:<your password>@127.0.0.1:
 (An environment variable set in the window wins over `.env`; close the window to go back to your real database.) The simulator refuses to run against a database that already holds a real learner unless you pass `--allow-real-learners`.
 
 Creates learners with hidden traits and realistic practice histories (about 25,000 events for the defaults), stores them through the same ingest code as the extension, and runs the pipeline. They are marked `is_synthetic`; anything built on them must be described as simulated (ADR-003). `--invalid-rate` (default `0.005`) deliberately corrupts a few events so you can watch validation quarantine them.
+
+## 9. Learner model (Phase 5)
+
+```powershell
+.venv\Scripts\python -m polybot_insights.model                     # today's snapshot
+.venv\Scripts\python -m polybot_insights.model --backfill-days 45   # plus one per past day
+```
+
+Builds skill scores, profiles, study patterns and inferred preferences (definitions in docs/LEARNER_MODEL.md). Run it after the pipeline; the simulator's `--run-pipeline` does both. Read one learner's model at `GET http://127.0.0.1:17495/v1/learners/<learner_id>/model?language=es`.

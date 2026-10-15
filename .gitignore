@@ -5,3 +5,10 @@ test-results/
 .env.*
 !.env.example
 *.log
+
+# Python (insights/). Never run Python from the repo root: Chrome refuses to load an
+# extension whose root contains names starting with "_" such as __pycache__ (ADR-012).
+insights/.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/

@@ -137,3 +137,11 @@ Builds skill scores, profiles, study patterns and inferred preferences (definiti
 ```
 
 Runs the rule catalog (docs/PERSONALIZATION_RULES.md) for every learner after the learner model is built, and keeps `personalization.decisions` current. Read one learner's decisions, each with its reason and the rule behind it, at `GET http://127.0.0.1:17495/v1/learners/<learner_id>/decisions?language=es`. The full daily sequence is pipeline → model → personalization; the simulator's `--run-pipeline` runs all three.
+
+## 11. BI exports (Phase 8)
+
+```powershell
+.venv\Scripts\python -m polybot_insights.exports
+```
+
+Writes Tableau-ready CSVs and `polybot_analytics.xlsx` to `insights/exports/` (git-ignored). Needs `POLYBOT_EXPORT_SALT` in `.env`. Learner IDs are replaced by anonymous keys and no vocabulary or learner text is included. Tableau and Excel instructions: docs/BI_EXPORTS.md.

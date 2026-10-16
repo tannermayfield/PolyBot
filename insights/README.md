@@ -145,3 +145,11 @@ Runs the rule catalog (docs/PERSONALIZATION_RULES.md) for every learner after th
 ```
 
 Writes Tableau-ready CSVs and `polybot_analytics.xlsx` to `insights/exports/` (git-ignored). Needs `POLYBOT_EXPORT_SALT` in `.env`. Learner IDs are replaced by anonymous keys and no vocabulary or learner text is included. Tableau and Excel instructions: docs/BI_EXPORTS.md.
+
+## 12. Machine learning (Phase 9)
+
+```powershell
+.venv\Scripts\python -m polybot_insights.ml
+```
+
+Trains and evaluates a skill-mastery model on the learner-model history (needs `--backfill-days` history from §9 and at least 6 learners), registers it in `personalization.models`, and stores predictions in `personalization.model_predictions`. Results and their limits: docs/ML_MODEL.md.

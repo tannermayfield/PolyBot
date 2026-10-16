@@ -146,6 +146,7 @@ Preference changes are **not** a separate write endpoint. They travel as `prefer
     │   ├── model/                  build.py (as-of SQL snapshots, ADR-024) · read.py (one learner as JSON)
     │   ├── personalization/        rules.py (catalog, ADR-025) · engine.py (reconcile decisions, outcomes)
     │   ├── exports/                build.py: anonymous Tableau CSVs + Excel workbook (ADR-027)
+    │   ├── ml/                     train.py: skill-mastery model, grouped evaluation, predictions (ADR-028)
     │   ├── api/app.py              FastAPI service (python -m polybot_insights.api)
     │   └── db/
     │       ├── migrate.py          applies numbered SQL migrations, records them in ops.schema_migrations
@@ -163,7 +164,7 @@ Preference changes are **not** a separate write endpoint. They travel as `prefer
         └── test_simulator.py       simulated learners load cleanly; corrupted ones are quarantined
 ```
 
-Later phases add `ml/` beside `exports/`.
+Phase 10 adds `cloud/` (AWS S3 archive) beside `ml/`.
 
 ## 9. Technology choices
 

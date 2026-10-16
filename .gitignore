@@ -11,6 +11,7 @@ test-results/
 insights/.venv/
 insights/build/
 insights/exports/
+insights/models/
 __pycache__/
 .pytest_cache/
 *.egg-info/

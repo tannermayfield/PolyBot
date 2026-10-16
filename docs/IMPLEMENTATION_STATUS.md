@@ -10,7 +10,7 @@ Tracks progress through the adaptive-learning phases. Update at the end of every
 | 4 Data pipeline | **Built** (2026-10-15), verified on simulated data | `insights/polybot_insights/pipeline/` (validate, transform, run), `ingest.py`, `simulator.py`; ADR-022–023. Python 128/128 incl. 45 rule tests, 15 end-to-end pipeline tests and 5 simulator tests (one proves the simulator refuses a database holding real learners). 25 simulated learners × 45 days (≈25k events) load in ≈27 s; deliberately corrupted events (0.5 %) are all quarantined with reasons; 0 `TRANSFORM_FAILED` | Not yet run on real learner data (needs the owner's database, insights/README.md §3–6) |
 | 5 Learner model | **Built** (2026-10-15), verified on simulated data | `model/build.py`, `model/read.py`, migration `003` (8 `vw_*` views + `confidence_label()`), [LEARNER_MODEL.md](LEARNER_MODEL.md), ADR-024, `GET /v1/learners/{id}/model`. Python 135/135; mastery ranks simulated learners like their hidden ability (Spearman > 0.6); 46-day backfill on 25 learners ≈ 12 s | Grammar, listening and reading have self-reports only until graded exercises exist; the proficiency band is a rough estimate, not CEFR |
 | 6 Rule-based personalization | **Built** (2026-10-15), verified on simulated data | `personalization/rules.py` (18 rules, 9 decision types), `engine.py`, migration `004` (`vw_user_personalization_summary`, `vw_recommendation_outcomes`), [PERSONALIZATION_RULES.md](PERSONALIZATION_RULES.md), ADR-025, `GET /v1/learners/{id}/decisions`. Python 149/149: each rule unit-tested; explicit preferences win and disagreement is stated; reruns do not churn; a new learner choice marks the old decision `overridden_by_learner`; outcomes come from events | Decisions are shown (Phase 7) but do not yet change which exercises the extension serves; topic decisions wait for topic-tagged content |
-| 7 User dashboard | Not started | — | |
+| 7 User dashboard | **Built** (2026-10-15), checked in preview with sample data | `insights-dashboard.js`, studio `#understanding` page, worker `INSIGHTS_LEARNER`, ADR-026. JS 133/133 (escaping, honest empty/unmeasured states, recommendation tracking); headless Chrome: all four sections render, recommendation click navigates, no page errors, no horizontal overflow at 390 px | Not yet viewed with real data (needs the installed extension + the owner's database) |
 | 8 BI / export layer | Not started | — | |
 | 9 Machine learning | Not started | — | |
 | 10 AWS | Not started | — | Requires AWS account, CLI, and boto3 |
@@ -33,8 +33,8 @@ Tracks progress through the adaptive-learning phases. Update at the end of every
 - [x] Inferred attributes include confidence *(value, confidence, evidence count, rationale)*
 - [x] Personalization decisions use learner data *(simulated data)*
 - [x] Personalization decisions include reasons *(reason, adaptation, source metrics, rule; enforced by constraints)*
-- [ ] Dashboard explains the learner model
-- [ ] Dashboard explains how content is adapted
+- [x] Dashboard explains the learner model *(sample data in preview)*
+- [x] Dashboard explains how content is adapted *(decisions with why / what changes / rule)*
 - [ ] Tableau-ready output exists
 - [ ] Excel-ready output exists
 - [ ] One ML pipeline trains successfully

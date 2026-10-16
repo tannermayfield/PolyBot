@@ -32,6 +32,21 @@ const VocabWriter = PolybotVocabWriter.createVocabWriter({
   keyFor: lang => SPTubeLang.storageKeys(lang).vocab,
   record: recordFromWorker
 });
+// The learner's model and active decisions for the dashboard (Phase 7). Returns
+// {state: 'off' | 'unreachable' | 'no_data' | 'ready', model?, decisions?}.
+async function fetchLearnerInsights(language) {
+  const status = await PolybotEventHub.status();
+  if (!status.enabled || !status.learnerId) return { state: 'off' };
+  const base = `${status.url.replace(/\/+$/, '')}/v1/learners/${encodeURIComponent(status.learnerId)}`;
+  const query = language ? `?language=${encodeURIComponent(language)}` : '';
+  let model, decisions;
+  try {
+    [model, decisions] = await Promise.all([fetch(`${base}/model${query}`), fetch(`${base}/decisions${query}`)]);
+  } catch (_) { return { state: 'unreachable' }; }
+  if (model.status === 404) return { state: 'no_data' };
+  if (!model.ok || !decisions.ok) return { state: 'unreachable' };
+  return { state: 'ready', model: await model.json(), decisions: await decisions.json() };
+}
 // Enabling, disabling and status are settings actions: extension pages only.
 const fromExtensionPage = sender => sender.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''));
 
@@ -48,6 +63,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (_sender.id !== chrome.runtime.id) { sendResponse({ ok: false }); return false; }
     VocabWriter.update(msg)
       .then(result => sendResponse({ ok: true, ...result }))
+      .catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (msg.type === 'INSIGHTS_LEARNER') {
+    if (!fromExtensionPage(_sender)) { sendResponse({ ok: false }); return false; }
+    fetchLearnerInsights(validLanguageCode(msg.language))
+      .then(result => sendResponse({ ok: true, result }))
       .catch(error => sendResponse({ ok: false, error: error.message }));
     return true;
   }

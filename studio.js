@@ -6,6 +6,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const paths = {
+chart:'<path d="M4 20V11m5.5 9V5m5.5 15v-8m5.5 8V8M2.5 20.5h19"/>',
 sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/>',
 signpost:'<path d="M10 22V4m0 2H3l-2 3 2 3h7m0-8h8l3 3-3 3h-8m-3 12h6"/>',
 wave:'<path d="M3 10v4m4-8v12m5-16v20m5-16v12m4-9v6"/>',
@@ -22,7 +23,7 @@ const btn = (action, label, name, variant = '', attrs = '') => `<button type="bu
 const note = (text, kind = '') => `<div class="inline-note ${kind}">${icon('info')}<span>${text}</span></div>`;
 const empty = (title, text, action = '') => `<div class="empty-state"><div class="empty-icon">${icon('wave')}</div><h3>${esc(title)}</h3><p>${esc(text)}</p>${action}</div>`;
 const heading = (title, subtitle, action = '', eyebrow = 'YOUR LEARNING SPACE') => `<div class="page-heading"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subtitle">${subtitle}</p></div>${action}</div>`;
-const pages = {home:'Home',personalization:'Personalization','learning-method':'Your Learning Method',interests:'Your Interests',regions:'Regions & Accents','my-path':'My Path',vocabulary:'Vocabulary',grammar:'Grammar',pronunciation:'Pronunciation',media:'Media'};
+const pages = {home:'Home',personalization:'Personalization',understanding:'How Polybot Understands You','learning-method':'Your Learning Method',interests:'Your Interests',regions:'Regions & Accents','my-path':'My Path',vocabulary:'Vocabulary',grammar:'Grammar',pronunciation:'Pronunciation',media:'Media'};
 const aliases = {today:['my-path','overview'],review:['vocabulary','review'],practice:['pronunciation','practice'],library:['pronunciation','library'],progress:['home',null]};
 let state, learning, page = 'home', operation = false, toastTimer, pendingReload = 0, mountedPersonalization = null;
 const ui = {search:'',source:'all',profiles:[],profilesUrl:'',reviewKind:'meaning',reviewId:null,revealed:false,reviewed:new Set(),comparison:null,attemptId:null,assessments:new Set(),pronunciationTab:'overview',dictionaryResult:null,vocabPractice:'list',grammarTopic:null,mediaResponse:null,resourceView:'home'};
@@ -98,7 +99,7 @@ function render() {
     $('#main').innerHTML = `<div id="personalization-view">${module.render(ctx)}</div>`;
     const cleanup = module.mount($('#personalization-view'),ctx);
     mountedPersonalization = typeof cleanup === 'function' ? {unmount:cleanup} : module;
-  } else $('#main').innerHTML = ({home:renderHome,personalization:renderPersonalization,'my-path':renderMyPath,vocabulary:renderVocabulary,grammar:renderGrammar,pronunciation:renderPronunciation,media:renderMedia}[page])();
+  } else $('#main').innerHTML = ({home:renderHome,personalization:renderPersonalization,understanding:renderUnderstanding,'my-path':renderMyPath,vocabulary:renderVocabulary,grammar:renderGrammar,pronunciation:renderPronunciation,media:renderMedia}[page])();
   const lockedHub = page === 'home' || page === 'personalization' || (page === 'my-path' && ui.resourceView === 'home') || (page === 'vocabulary' && ui.resourceView === 'home') || (page === 'pronunciation' && ui.pronunciationTab === 'overview') || (page === 'media' && ui.resourceView === 'home');
   document.body.classList.toggle('hub-locked',lockedHub);
   $('#main').classList.toggle('hub-shell',lockedHub);
@@ -137,7 +138,8 @@ function featureFocus() { window.scrollTo(0,0); $('#main').focus({preventScroll:
 const personalizationItems = [
   ['learning-method','Your Learning Method','Discover your balance of listening and doing, explore grammar your way, and choose how you like to practice.','cards','01','Find your approach'],
   ['interests','Your Interests','From food and travel to science and sport, choose up to 10 interests to shape future examples and scenarios.','sun','02','Choose your interests'],
-  ['regions','Regions & Accents','Explore the Spanish-speaking world. Get to know regional expressions and find a voice you connect with.','globe','03','Explore Spanish accents']
+  ['regions','Regions & Accents','Explore the Spanish-speaking world. Get to know regional expressions and find a voice you connect with.','globe','03','Explore Spanish accents'],
+  ['understanding','How Polybot Understands You','See what Polybot has learned from your practice, how sure it is, and how it is adapting.','chart','04','See your learning profile']
 ];
 function renderPersonalizationCards() {
   return personalizationItems.map(([route,title,description,symbol,index,cta]) => `<a class="card home-personalization-card" href="#${route}"><div class="home-card-top"><span class="home-card-icon">${icon(symbol)}</span><span>${index}</span></div><h3>${title}</h3><p>${description}</p><span class="home-card-cta">${cta}${icon('arrow')}</span></a>`).join('');
@@ -149,8 +151,64 @@ function renderHome() {
   const vocabulary = learning?.vocabulary?.length || 0, recordings = isSpanish() ? state.attempts.length : 0, mediaDone = (learning?.media || []).filter(item => item.completed).length;
   return `<div class="hub-page home-page">${hubHeading('What would you like to practice?',`${esc(targetLang().name)} · Pick one area and give it your full attention.`,'WELCOME BACK')}<div class="feature-grid hub-grid" data-count="6">${hubLink('my-path','My Path',next ? `Up next: ${esc(next.title)}` : 'Follow your guided course.','signpost',`${percent}% complete`)}${hubLink('personalization','Personalization','Shape the examples, topics, and voices you meet.','sun','3 preference areas')}${hubLink('vocabulary','Vocabulary','Build recall from the words you save.','cards',`${vocabulary} saved ${vocabulary === 1 ? 'word' : 'words'}`)}${hubLink('grammar','Grammar','Explore principles and complete focused practice.','library',`${done}/${topics.length} practiced`)}${hubLink('pronunciation','Pronunciation','Train your ear, rhythm, and speaking confidence.','wave',`${recordings} ${recordings === 1 ? 'recording' : 'recordings'}`)}${hubLink('media','Media','Read, listen, and respond to meaningful material.','headphones',`${mediaDone} completed`)}</div></div>`;
 }
+// ── How Polybot Understands You (Phase 7): rendering lives in insights-dashboard.js.
+const Dash = window.PolybotDashboard;
+function lessonTitle(id) {
+  const topic = (learning?.grammarTopics || []).find(item => item.id === id);
+  return topic ? topic.title : String(id).split(':').pop().replace(/-/g,' ');
+}
+function topicLabels() {
+  return Object.fromEntries((window.PersonalizationInterests?.CATEGORIES || []).flatMap(c => c.items.map(i => [i.id,i.label])));
+}
+// Called from render(): mark loading now, fetch on the next tick. Running synchronously would
+// render the result inside the outer render(), which then overwrites it with "Loading…".
+function startUnderstandingLoad() {
+  const language = targetLang().code;
+  ui.understanding = {state:'loading',language};
+  setTimeout(() => loadUnderstanding(language),0);
+}
+async function loadUnderstanding(language) {
+  let next;
+  if(!insightsAvailable()) next = {state:'preview',language};
+  else {
+    try { next = {...await runtimeMessage('INSIGHTS_LEARNER',{language}),language}; }
+    catch(error) { next = {state:'error',error:error.message,language}; }
+  }
+  if(ui.understanding?.language !== language || ui.understanding.state !== 'loading') return;
+  ui.understanding = next; ui.shownRecommendations = new Set();
+  if(page === 'understanding') render();
+}
+function renderUnderstanding() {
+  if(!Dash) return empty('This page is unavailable.','Reload the extension and try again.');
+  const u = ui.understanding;
+  if(!u || (u.state !== 'sample' && u.language !== targetLang().code)) { startUnderstandingLoad(); return '<div class="understanding-page"><p class="muted" role="status">Loading your learning profile…</p></div>'; }
+  if(u.state === 'loading') return '<div class="understanding-page"><p class="muted" role="status">Loading your learning profile…</p></div>';
+  const helpers = {lessonTitle,topics:topicLabels(),languageName:targetLang().name};
+  if(u.state === 'sample') return Dash.render(Dash.SAMPLE,{...helpers,languageName:'Spanish'});
+  if(u.state === 'ready') { setTimeout(() => recordShown(u),0); return Dash.render({model:u.model,decisions:u.decisions},helpers); }
+  return Dash.emptyState(u.state,u.error);
+}
+// recommendation_shown once per displayed recommendation per visit: the denominator of acceptance (spec §28).
+function recordShown(u) {
+  if(ui.understanding !== u || page !== 'understanding') return;
+  ui.shownRecommendations = ui.shownRecommendations || new Set();
+  for(const rec of Dash.shownRecommendations(u.decisions)) {
+    if(ui.shownRecommendations.has(rec.recommendation_id)) continue;
+    ui.shownRecommendations.add(rec.recommendation_id);
+    track('recommendation_shown',{context:{recommendation_id:rec.recommendation_id,decision_id:rec.decision_id},payload:{placement:'dashboard',rank:rec.rank}});
+  }
+}
+function openRecommendation(node) {
+  const {id,targetType,targetId} = node.dataset;
+  if(ui.understanding?.state === 'ready') track('recommendation_accepted',{context:{recommendation_id:id},payload:{}});
+  if(targetType === 'lesson') { go('grammar'); ui.grammarTopic = targetId; track('lesson_started',{context:{lesson_id:targetId},payload:{entry:'recommendation'}}); render(); return featureFocus(); }
+  if(targetType === 'topic') return go('interests');
+  const skill = targetType === 'skill' ? targetId : 'vocabulary';
+  if(skill === 'vocabulary') { go('vocabulary'); ui.resourceView = 'practice'; ui.vocabPractice = 'recall'; ui.revealed = false; newRecallQuestion(); render(); return featureFocus(); }
+  go(skill === 'pronunciation' ? 'pronunciation' : skill.startsWith('grammar') ? 'grammar' : 'media');
+}
 function renderPersonalization() {
-  return `<div class="personalization-page hub-page">${hubHeading('Make it yours.','Shape your learning around how you practice, what interests you, and the voices you want to hear.','PERSONALIZATION')}<section class="home-personalization personalization-page-content" aria-labelledby="personalization-title"><div class="home-personalization-grid hub-grid" data-count="3">${renderPersonalizationCards()}</div></section></div>`;
+  return `<div class="personalization-page hub-page">${hubHeading('Make it yours.','Shape your learning around how you practice, what interests you, and the voices you want to hear.','PERSONALIZATION')}<section class="home-personalization personalization-page-content" aria-labelledby="personalization-title"><div class="home-personalization-grid hub-grid" data-count="${personalizationItems.length}">${renderPersonalizationCards()}</div></section></div>`;
 }
 function renderMyPath() {
   const steps = learning?.path || [];
@@ -668,6 +726,9 @@ async function action(name,node) {
       if(ui.recall.hintsUsed > before) track('hint_requested',{context:{exercise_id:ui.recall.exerciseId,vocab_item_id:ui.recall.vocabItemId},payload:{hint_type:'eliminate_choice'}});
       return render();
     }
+    case 'understanding-refresh': ui.understanding = null; return render();
+    case 'understanding-sample': ui.understanding = {state:'sample'}; render(); return featureFocus();
+    case 'open-recommendation': return openRecommendation(node);
     case 'recall-skip': leaveRecall('skip'); newRecallQuestion(); return render();
     case 'recall-next': newRecallQuestion(); render(); return $('.recall-choice')?.focus();
     case 'close-vocab-practice': if(ui.vocabPractice === 'recall') { leaveRecall('close'); ui.recall = null; } ui.resourceView = 'home'; ui.vocabPractice = 'list'; ui.revealed = false; return render();

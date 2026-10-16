@@ -149,3 +149,11 @@ test('Insights settings messages are refused from web pages; events flow once en
   assert.equal((await bg.send({ type: 'RECORD_EVENT', event: bad }, page)).reason, 'invalid');
   assert.equal(bg.stored[bg.context.PolybotEvents.BUFFER_KEY].length, 3);
 });
+
+test('the dashboard message reports "off" until Insights is enabled and is refused from web pages', async () => {
+  const bg = background();
+  const plain = value => JSON.parse(JSON.stringify(value));
+  const studio = { id: 'test', url: 'chrome-extension://test/studio.html' };
+  assert.deepEqual(plain(await bg.send({ type: 'INSIGHTS_LEARNER', language: 'es' }, { id: 'test', url: 'https://example.com/' })), { ok: false });
+  assert.deepEqual(plain(await bg.send({ type: 'INSIGHTS_LEARNER', language: 'es' }, studio)), { ok: true, result: { state: 'off' } });
+});

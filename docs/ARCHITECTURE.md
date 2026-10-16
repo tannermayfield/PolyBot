@@ -129,7 +129,8 @@ Preference changes are **not** a separate write endpoint. They travel as `prefer
 │   ├── insights-events.js  event stamping on every surface + the service-worker hub (buffer, sessions, sync)
 │   ├── vocab-writer.js     single writer of vocabulary maps in the service worker (ADR-019)
 │   ├── prefs-store.js      personalization preferences in chrome.storage.local (ADR-021)
-│   └── vocab-recall.js     Quick Recall question logic (ADR-004, ADR-017)
+│   ├── vocab-recall.js     Quick Recall question logic (ADR-004, ADR-017)
+│   └── insights-dashboard.js  "How Polybot Understands You" renderer (ADR-026)
 ├── scripts/export-catalog.cjs  extension content → catalog JSON (ADR-015)
 ├── server/             existing Node assessment bridge
 ├── docs/               specification, decisions, architecture, data model, taxonomy
